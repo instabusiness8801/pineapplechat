@@ -540,12 +540,29 @@ io.on('connection', (socket) => {
     socket.emit('chat-left', { by: socket.id, partnerId: targetId, blocked: true });
   });
 
+  // Explicit log off — remove immediately (no 2‑minute grace)
+  socket.on('logout', () => {
+    const token = socketToSession.get(socket.id) || socket.sessionToken;
+    if (token) {
+      const sess = sessions.get(token);
+      const name = sess && sess.profile && sess.profile.username;
+      removeSession(token, 'logout');
+      console.log(`[logout] ${name || socket.id}`);
+    }
+    socket.profile = null;
+    socket.sessionToken = null;
+    socket.emit('logged-out');
+    broadcastOnlineUsers();
+    broadcastStats();
+  });
+
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} (${reason})`);
 
     const token = socketToSession.get(socket.id);
     const sess = token ? sessions.get(token) : null;
 
+    // If already removed via logout, nothing left to grace
     if (sess) {
       sess.disconnectedAt = Date.now();
       // Keep socketId so list/chat remapping still works until grace ends

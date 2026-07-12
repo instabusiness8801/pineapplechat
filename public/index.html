@@ -802,6 +802,13 @@
           <i class="fa-solid fa-moon icon-moon text-sm"></i>
           <i class="fa-solid fa-sun icon-sun text-sm" style="color:var(--pine-gold)"></i>
         </button>
+
+        <button type="button" id="logout-btn" title="Log off"
+                class="hidden items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-red-50 hover:border-red-300 hover:text-red-600 transition min-h-[36px]"
+                aria-label="Log off">
+          <i class="fa-solid fa-right-from-bracket text-sm"></i>
+          <span class="hidden sm:inline">Log off</span>
+        </button>
         
         <div class="text-xs theme-muted hidden lg:block">
           100% anonymous
@@ -1350,6 +1357,7 @@
       }
 
       currentState = screen;
+      if (typeof updateLogoutButtonVisibility === 'function') updateLogoutButtonVisibility();
     }
 
     // ---- Session restore (2 minutes) ----
@@ -1391,6 +1399,55 @@
     function clearSession() {
       try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
       sessionToken = null;
+    }
+
+    function updateLogoutButtonVisibility() {
+      const btn = document.getElementById('logout-btn');
+      if (!btn) return;
+      if (currentProfile && currentState === 'hub') {
+        btn.classList.remove('hidden');
+        btn.classList.add('inline-flex');
+      } else {
+        btn.classList.add('hidden');
+        btn.classList.remove('inline-flex');
+      }
+    }
+
+    function logOff() {
+      if (!confirm('Log off? You will leave the online list and clear this device session.')) return;
+
+      // Tell server to remove immediately (no 2‑min grace)
+      if (socket && socket.connected) {
+        socket.emit('logout');
+      }
+
+      clearSession();
+      currentProfile = null;
+      partnerProfile = null;
+      chats = {};
+      activeChatId = null;
+      isMatched = false;
+      currentFilters = { gender: 'all', minAge: MIN_AGE, maxAge: MAX_AGE, country: '', city: '' };
+      setMobileChatOpen(false);
+
+      if (chatMessagesEl) chatMessagesEl.innerHTML = '';
+      if (chatPlaceholder) chatPlaceholder.classList.remove('hidden');
+      if (activeChatArea) activeChatArea.classList.add('hidden');
+
+      // Reset form fields lightly (keep locations lists)
+      try {
+        const form = document.getElementById('profile-form');
+        if (form) form.reset();
+        const agree = document.getElementById('agree-terms');
+        if (agree) agree.checked = false;
+        removeProfileImage();
+      } catch (e) { /* ignore */ }
+
+      showScreen('start');
+      updateLogoutButtonVisibility();
+      if (socket && socket.connected) {
+        socket.emit('request-online-users');
+      }
     }
 
     function remapChatsFromOnlineList(users) {
@@ -3189,6 +3246,14 @@
           closeCurrentChat();
         });
       }
+
+      // Log off (top-right)
+      const logoutBtn = document.getElementById('logout-btn');
+      if (logoutBtn && !logoutBtn.dataset.bound) {
+        logoutBtn.dataset.bound = '1';
+        logoutBtn.addEventListener('click', () => logOff());
+      }
+      updateLogoutButtonVisibility();
 
       // Keep layout correct if user rotates device
       if (!window._pcResizeBound) {
