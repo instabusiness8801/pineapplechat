@@ -560,23 +560,233 @@
       letter-spacing: 0.5px;
       font-weight: 600;
     }
+
+    /* ========== Responsive: mobile & tablet ========== */
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+    body {
+      overflow-x: hidden;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .page-wrap {
+      width: 100%;
+      max-width: 72rem;
+      margin-left: auto;
+      margin-right: auto;
+      padding: 1rem;
+      padding-left: max(1rem, env(safe-area-inset-left));
+      padding-right: max(1rem, env(safe-area-inset-right));
+    }
+    @media (min-width: 768px) {
+      .page-wrap { padding: 1.5rem 1.25rem; }
+    }
+
+    /* Start / login: stack on small screens, form first */
+    #start-screen {
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 1rem;
+      width: 100%;
+    }
+    #start-screen .start-online-col {
+      width: 100%;
+      flex-shrink: 0;
+    }
+    #start-screen .start-form-col {
+      width: 100%;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    #start-online-list {
+      max-height: 220px;
+    }
+    @media (min-width: 768px) {
+      #start-online-list { max-height: 320px; }
+    }
+    @media (min-width: 1024px) {
+      #start-screen {
+        flex-direction: row;
+        gap: 1.5rem;
+        align-items: flex-start;
+      }
+      #start-screen .start-online-col {
+        width: 18rem;
+        position: sticky;
+        top: 5rem;
+      }
+      #start-online-list { max-height: 420px; }
+    }
+
+    /* Profile form card padding on small screens */
+    .profile-card {
+      padding: 1.25rem !important;
+      border-radius: 1.25rem !important;
+    }
+    @media (min-width: 640px) {
+      .profile-card {
+        padding: 1.75rem !important;
+        border-radius: 1.5rem !important;
+      }
+    }
+
+    /* Touch-friendly controls */
+    @media (max-width: 767px) {
+      #username, #age, #country, #city, #whats-on-mind, #multi-chat-input {
+        font-size: 16px !important; /* prevents iOS zoom on focus */
+        min-height: 44px;
+      }
+      .gender-pill-male,
+      .gender-pill-female {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #profile-form button[type="submit"] {
+        min-height: 48px;
+        font-size: 1rem;
+      }
+      #theme-toggle {
+        width: 2.5rem;
+        height: 2.5rem;
+      }
+      .logo-word {
+        font-size: 1.1rem;
+      }
+      .message-bubble {
+        max-width: 88%;
+        padding: 10px 14px;
+      }
+      .chat-attach-wrap {
+        max-width: min(85%, 260px);
+      }
+    }
+
+    /* Chat hub layout */
+    #chat-hub .hub-main {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-height: 0;
+      height: calc(100dvh - 9.5rem);
+      max-height: calc(100dvh - 9.5rem);
+    }
+    @media (min-width: 768px) {
+      #chat-hub .hub-main {
+        flex-direction: row;
+        gap: 1rem;
+        height: calc(100dvh - 10.5rem);
+        max-height: calc(100dvh - 10.5rem);
+      }
+    }
+    #hub-users-pane {
+      width: 100%;
+      min-height: 0;
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+    }
+    #hub-chat-pane {
+      width: 100%;
+      min-height: 0;
+      flex: 1 1 auto;
+      display: none; /* mobile: hide until a chat is open */
+      flex-direction: column;
+    }
+    @media (min-width: 768px) {
+      #hub-users-pane {
+        width: 16rem;
+        flex: 0 0 16rem;
+        display: flex !important;
+      }
+      #hub-chat-pane {
+        flex: 1 1 auto;
+        display: flex !important;
+        min-width: 0;
+      }
+    }
+    @media (min-width: 1024px) {
+      #hub-users-pane {
+        width: 18rem;
+        flex: 0 0 18rem;
+      }
+    }
+
+    /* Mobile: show either list OR chat full height */
+    @media (max-width: 767px) {
+      body.mobile-chat-open #hub-users-pane {
+        display: none !important;
+      }
+      body.mobile-chat-open #hub-chat-pane {
+        display: flex !important;
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      body.mobile-chat-open #chat-hub .hub-filters {
+        display: none;
+      }
+      #mobile-back-to-list {
+        display: inline-flex;
+      }
+    }
+    @media (min-width: 768px) {
+      #mobile-back-to-list {
+        display: none !important;
+      }
+    }
+
+    /* Compact stats on small screens */
+    #stats-mobile {
+      display: none;
+    }
+    @media (max-width: 639px) {
+      #stats-mobile {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--pine-leaf);
+      }
+    }
+
+    /* Filter bar wraps cleanly */
+    .hub-filters-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+    }
+    @media (max-width: 640px) {
+      .hub-filters-inner select {
+        max-width: 100%;
+        min-width: 0;
+        flex: 1 1 8rem;
+      }
+    }
   </style>
 </head>
 <body class="min-h-screen">
   <!-- Top Nav -->
   <nav class="theme-nav border-b sticky top-0 z-50 shadow-sm backdrop-blur-lg">
     <div class="pineapple-bar"></div>
-    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-      <div class="flex items-center gap-x-3">
-        <div class="w-9 h-9 logo-icon rounded-xl flex items-center justify-center shadow-md" title="PineappleChat">
-          <span class="text-lg leading-none" aria-hidden="true">🍍</span>
+    <div class="max-w-4xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-x-2 sm:gap-x-3 min-w-0">
+        <div class="w-8 h-8 sm:w-9 sm:h-9 logo-icon rounded-xl flex items-center justify-center shadow-md flex-shrink-0" title="PineappleChat">
+          <span class="text-base sm:text-lg leading-none" aria-hidden="true">🍍</span>
         </div>
-        <div class="logo-font logo-word" aria-label="PineappleChat">
+        <div class="logo-font logo-word truncate" aria-label="PineappleChat">
           <span class="logo-pine">Pineapple</span><span class="logo-chat">Chat</span>
         </div>
       </div>
       
-      <div class="flex items-center gap-x-3 sm:gap-x-4 text-sm">
+      <div class="flex items-center gap-x-2 sm:gap-x-4 text-sm flex-shrink-0">
+        <div id="stats-mobile" title="People online">
+          <span class="w-1.5 h-1.5 rounded-full status-dot inline-block" style="background:var(--pine-leaf)"></span>
+          <span id="online-count-mobile">0</span>
+        </div>
         <div id="stats" 
              class="hidden sm:flex items-center gap-x-2 theme-surface border theme-border px-3.5 py-1 rounded-full text-xs">
           <div class="flex items-center gap-x-1.5">
@@ -593,35 +803,35 @@
           <i class="fa-solid fa-sun icon-sun text-sm" style="color:var(--pine-gold)"></i>
         </button>
         
-        <div class="text-xs theme-muted hidden md:block">
+        <div class="text-xs theme-muted hidden lg:block">
           100% anonymous
         </div>
       </div>
     </div>
   </nav>
 
-  <div class="max-w-6xl mx-auto px-4 py-8">
+  <div class="page-wrap">
     
-    <!-- PROFILE / START SCREEN - now with left online list -->
-    <div id="start-screen" class="screen flex gap-6 max-w-6xl mx-auto">
+    <!-- PROFILE / START SCREEN: form first on mobile, side-by-side on desktop -->
+    <div id="start-screen" class="screen max-w-6xl mx-auto">
       
-      <!-- Left: Online users list (always visible on homepage) -->
-      <div class="w-80 flex-shrink-0">
-        <div class="surface-card card-teal rounded-3xl p-4 sticky top-4">
+      <!-- Online users list -->
+      <div class="start-online-col">
+        <div class="surface-card card-teal rounded-2xl sm:rounded-3xl p-3 sm:p-4">
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold text-sm theme-text-strong">Who's online</h3>
             <span id="online-list-badge" class="text-[10px] px-2 py-0.5 rounded-full chip-green font-medium">Live</span>
           </div>
-          <div id="start-online-list" class="space-y-1 text-xs max-h-[420px] overflow-auto">
+          <div id="start-online-list" class="space-y-1.5 text-xs overflow-auto">
             <!-- populated by JS -->
           </div>
-          <p class="text-[9px] text-gray-500 mt-2">Fill your details on the right, then click a user to chat.</p>
+          <p class="text-[9px] text-gray-500 mt-2">Fill your details below, then tap a user to chat.</p>
         </div>
       </div>
 
-      <!-- Right: Profile form card -->
-      <div class="flex-1">
-        <div class="surface-card card-yellow rounded-3xl p-7">
+      <!-- Profile form card -->
+      <div class="start-form-col">
+        <div class="surface-card card-yellow profile-card">
           <form id="profile-form" class="space-y-5">
             <!-- Username -->
             <div>
@@ -771,123 +981,119 @@
 
     </div>
 
-    <!-- MULTI-CHAT HUB: Filters on top + List on left + Chat on right -->
+    <!-- MULTI-CHAT HUB: Filters + List + Chat (responsive) -->
     <div id="chat-hub" class="screen max-w-7xl mx-auto hidden">
-      <!-- Filters on top, separate -->
-      <div class="mb-3 surface-card card-blue rounded-2xl p-3">
-        <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs">
-          <div class="font-medium theme-text-strong mr-1">Filters:</div>
+      <!-- Filters -->
+      <div class="hub-filters mb-3 surface-card card-blue rounded-2xl p-3">
+        <div class="hub-filters-inner">
+          <div class="font-medium theme-text-strong">Filters:</div>
 
-          <!-- Gender -->
           <div class="flex items-center gap-1">
             <span class="theme-muted">Gender</span>
             <div class="flex gap-1" id="sidebar-gender-filters">
-              <button data-gender="all" class="gender-filter-btn is-active-all px-2 py-0.5 rounded text-[10px] border border-transparent">All</button>
-              <button data-gender="male" class="gender-filter-btn px-2 py-0.5 rounded border border-gray-300 text-[10px] theme-text">M</button>
-              <button data-gender="female" class="gender-filter-btn px-2 py-0.5 rounded border border-gray-300 text-[10px] theme-text">F</button>
+              <button type="button" data-gender="all" class="gender-filter-btn is-active-all px-2.5 py-1.5 rounded text-[10px] border border-transparent min-h-[36px]">All</button>
+              <button type="button" data-gender="male" class="gender-filter-btn px-2.5 py-1.5 rounded border border-gray-300 text-[10px] theme-text min-h-[36px]">M</button>
+              <button type="button" data-gender="female" class="gender-filter-btn px-2.5 py-1.5 rounded border border-gray-300 text-[10px] theme-text min-h-[36px]">F</button>
             </div>
           </div>
 
-          <!-- Age filter (separate from profile age field — do not use min= on profile age) -->
           <div class="flex items-center gap-1">
-            <span class="text-gray-500">Age</span>
+            <span class="theme-muted">Age</span>
             <input id="sidebar-age-min" type="text" inputmode="numeric" maxlength="2" value="18"
                    aria-label="Minimum age filter"
-                   class="w-14 theme-field-yellow border border-gray-300 rounded px-1 py-0.5 text-xs">
-            <span class="text-gray-500">-</span>
+                   class="w-14 theme-field-yellow border border-gray-300 rounded px-1 py-1.5 text-xs min-h-[36px]">
+            <span class="theme-muted">-</span>
             <input id="sidebar-age-max" type="text" inputmode="numeric" maxlength="2" value="99"
                    aria-label="Maximum age filter"
-                   class="w-14 theme-field-green border border-gray-300 rounded px-1 py-0.5 text-xs">
+                   class="w-14 theme-field-green border border-gray-300 rounded px-1 py-1.5 text-xs min-h-[36px]">
           </div>
 
-          <!-- Country -->
-          <div class="flex items-center gap-1">
-            <span class="text-gray-500">Country</span>
+          <div class="flex items-center gap-1 flex-1 min-w-[8rem]">
+            <span class="theme-muted">Country</span>
             <select id="sidebar-country-filter"
-                    class="max-w-[9.5rem] theme-field-yellow border border-gray-300 rounded px-2 py-0.5 text-xs">
+                    class="flex-1 min-w-0 theme-field-yellow border border-gray-300 rounded px-2 py-1.5 text-xs min-h-[36px]">
               <option value="">All</option>
             </select>
           </div>
 
-          <!-- City -->
-          <div class="flex items-center gap-1">
-            <span class="text-gray-500">City</span>
+          <div class="flex items-center gap-1 flex-1 min-w-[8rem]">
+            <span class="theme-muted">City</span>
             <select id="sidebar-city-filter" disabled
-                    class="max-w-[9.5rem] theme-field-green border border-gray-300 rounded px-2 py-0.5 text-xs disabled:opacity-50">
+                    class="flex-1 min-w-0 theme-field-green border border-gray-300 rounded px-2 py-1.5 text-xs min-h-[36px] disabled:opacity-50">
               <option value="">All</option>
             </select>
           </div>
 
-          <button id="refresh-sidebar-btn" class="ml-auto text-xs px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50">↻ Refresh</button>
+          <button type="button" id="refresh-sidebar-btn" class="text-xs px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 min-h-[36px]">↻ Refresh</button>
         </div>
       </div>
 
-      <div class="flex gap-4 h-[calc(72vh-60px)] min-h-0">
-        <!-- Left: Online users list ONLY (no filters above it now) -->
-        <div class="w-72 flex-shrink-0 surface-card card-green rounded-2xl flex flex-col overflow-hidden min-h-0">
+      <div class="hub-main min-h-0">
+        <!-- Online users pane -->
+        <div id="hub-users-pane" class="surface-card card-green rounded-2xl flex flex-col overflow-hidden min-h-0">
           <div class="p-3 border-b theme-border flex items-center justify-between theme-surface flex-shrink-0">
             <div>
               <div class="font-semibold text-sm theme-text-strong">Online</div>
               <div id="sidebar-count" class="text-[10px] theme-muted">0 online</div>
             </div>
+            <span class="text-[10px] theme-muted md:hidden">Tap someone to chat</span>
           </div>
-          <!-- Users list -->
-          <div id="sidebar-online-list" class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 text-sm theme-surface">
+          <div id="sidebar-online-list" class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 text-sm theme-surface">
             <!-- populated by renderSidebarUsers -->
           </div>
         </div>
 
-        <!-- Right: Main Chat Area -->
-        <div class="flex-1 flex flex-col surface-card card-coral rounded-2xl overflow-hidden min-h-0 min-w-0 chat-pane">
-          <div id="chat-placeholder" class="flex-1 flex items-center justify-center theme-muted text-sm theme-surface">
-            Select a user from the list on the left to start chatting
+        <!-- Chat pane -->
+        <div id="hub-chat-pane" class="surface-card card-coral rounded-2xl overflow-hidden min-h-0 min-w-0 chat-pane flex flex-col">
+          <div id="chat-placeholder" class="flex-1 flex items-center justify-center theme-muted text-sm theme-surface p-4 text-center">
+            <span class="md:hidden">Tap a person from the list to start chatting</span>
+            <span class="hidden md:inline">Select a user from the list on the left to start chatting</span>
           </div>
 
           <div id="active-chat-area" class="hidden flex-1 flex flex-col min-h-0 overflow-hidden theme-surface chat-pane-body">
-            <!-- Dynamic chat header — never shrinks away -->
-            <div class="theme-surface border-b theme-border px-4 py-2 flex items-center justify-between flex-shrink-0">
-              <div id="active-chat-header" class="flex items-center gap-3 min-w-0 flex-1">
+            <div class="theme-surface border-b theme-border px-2 sm:px-4 py-2 flex items-center justify-between flex-shrink-0 gap-1">
+              <button type="button" id="mobile-back-to-list" class="items-center justify-center w-9 h-9 rounded-lg border theme-border theme-text flex-shrink-0" title="Back to online list" aria-label="Back to online list">
+                <i class="fa-solid fa-arrow-left text-sm"></i>
+              </button>
+              <div id="active-chat-header" class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                 <!-- filled by JS -->
               </div>
-              <div class="flex gap-2 items-center flex-shrink-0">
-                <button id="leave-chat-btn" title="Leave this chat" class="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded flex items-center gap-1">
+              <div class="flex gap-1 sm:gap-2 items-center flex-shrink-0">
+                <button type="button" id="leave-chat-btn" title="Leave this chat" class="text-xs px-2 py-1.5 text-red-500 hover:bg-red-50 rounded flex items-center gap-1 min-h-[36px]">
                   <i class="fa-solid fa-door-open"></i>
                   <span class="hidden sm:inline text-[10px]">Leave</span>
                 </button>
-                <button id="block-user-btn" title="Block this user" class="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded flex items-center gap-1">
+                <button type="button" id="block-user-btn" title="Block this user" class="text-xs px-2 py-1.5 text-red-500 hover:bg-red-50 rounded flex items-center gap-1 min-h-[36px]">
                   <i class="fa-solid fa-ban"></i>
                   <span class="hidden sm:inline text-[10px]">Block</span>
                 </button>
-                <button id="close-chat-pane-btn" title="Close chat pane" class="text-xs px-3 py-1 border theme-border rounded hover:bg-gray-100 theme-text">Close</button>
+                <button type="button" id="close-chat-pane-btn" title="Close chat pane" class="text-xs px-2 sm:px-3 py-1.5 border theme-border rounded hover:bg-gray-100 theme-text min-h-[36px]">Close</button>
               </div>
             </div>
 
-            <!-- Messages — scrolls; min-h-0 is required so large images don't hide the composer -->
-            <div id="chat-messages" class="p-4 space-y-3 text-sm chat-messages theme-chat-bg chat-messages-scroll">
+            <div id="chat-messages" class="p-3 sm:p-4 space-y-3 text-sm chat-messages theme-chat-bg chat-messages-scroll">
               <!-- messages go here -->
             </div>
 
             <div id="typing-indicator" class="hidden px-4 py-1 text-xs theme-muted italic theme-chat-bg flex-shrink-0">Stranger is typing...</div>
 
-            <!-- Input — always pinned at bottom -->
-            <div class="p-3 theme-surface border-t theme-border chat-composer">
-              <form id="multi-chat-form" class="flex gap-2 items-center">
-                <button type="button" id="attach-btn" title="Attach image or video (no links allowed)" class="px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl">
+            <div class="p-2 sm:p-3 theme-surface border-t theme-border chat-composer">
+              <form id="multi-chat-form" class="flex gap-1.5 sm:gap-2 items-center">
+                <button type="button" id="attach-btn" title="Attach image or video (no links allowed)" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">
                   <i class="fa-solid fa-paperclip"></i>
                 </button>
-                <button type="button" id="chat-emoji-btn" title="Add emoji" class="px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl">😊</button>
-                <input id="multi-chat-input" type="text" placeholder="Type a message… (no links or unsafe words)" 
-                       class="flex-1 min-w-0 theme-input theme-field-yellow border focus-ring-colorful rounded-2xl px-4 py-2 text-sm outline-none">
-                <button type="submit" class="btn-primary-g px-5 py-2 rounded-2xl text-sm shadow-sm flex-shrink-0">
+                <button type="button" id="chat-emoji-btn" title="Add emoji" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">😊</button>
+                <input id="multi-chat-input" type="text" placeholder="Type a message…" enterkeyhint="send" autocomplete="off"
+                       class="flex-1 min-w-0 theme-input theme-field-yellow border focus-ring-colorful rounded-2xl px-3 sm:px-4 py-2 text-sm outline-none min-h-[44px]">
+                <button type="submit" class="btn-primary-g px-3 sm:px-5 py-2 rounded-2xl text-sm shadow-sm flex-shrink-0 min-h-[44px] min-w-[44px]" aria-label="Send">
                   <i class="fa-solid fa-paper-plane"></i>
                 </button>
-                <input type="file" id="attachment-input" accept="image/*,video/*" class="hidden">
+                <input type="file" id="attachment-input" accept="image/*,video/*" class="hidden" capture="environment">
               </form>
               <div id="chat-limit-status" class="text-[10px] mt-1 px-1 theme-muted"></div>
             </div>
           </div>
         </div>
-
       </div>
     </div>
 
@@ -1098,6 +1304,14 @@
     const activeChatHeader = document.getElementById('active-chat-header');
     const closeChatPaneBtn = document.getElementById('close-chat-pane-btn');
 
+    function isMobileLayout() {
+      return window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
+    }
+
+    function setMobileChatOpen(open) {
+      document.body.classList.toggle('mobile-chat-open', !!open);
+    }
+
     function showScreen(screen) {
       if (startScreen) {
         startScreen.classList.add('hidden');
@@ -1109,6 +1323,7 @@
       }
 
       if (screen === 'start' && startScreen) {
+        setMobileChatOpen(false);
         startScreen.classList.remove('hidden');
         startScreen.removeAttribute('inert');
         if (typeof renderStartOnlineList === 'function') renderStartOnlineList();
@@ -1116,6 +1331,9 @@
         if (typeof initLocationDropdowns === 'function') initLocationDropdowns();
       }
       if (screen === 'hub' && chatHub) {
+        // On mobile, start on user list unless a chat is already active
+        if (!activeChatId) setMobileChatOpen(false);
+        else if (isMobileLayout()) setMobileChatOpen(true);
         chatHub.classList.remove('hidden');
         chatHub.removeAttribute('inert');
         if (typeof initLocationDropdowns === 'function') initLocationDropdowns();
@@ -1258,9 +1476,15 @@
       });
 
       socket.on('stats', ({ online, chatting }) => {
-        onlineCountEl.textContent = online;
-        chattingCountEl.textContent = chatting;
-        statsEl.classList.remove('hidden');
+        const o = String(online ?? 0);
+        if (onlineCountEl) onlineCountEl.textContent = o;
+        const mobileCount = document.getElementById('online-count-mobile');
+        if (mobileCount) mobileCount.textContent = o;
+        if (chattingCountEl) {
+          const n = chatting ?? 0;
+          chattingCountEl.textContent = n === 1 ? '1 chatting' : `${n} chatting`;
+        }
+        if (statsEl) statsEl.classList.remove('hidden');
       });
 
       socket.on('online-users', (users) => {
@@ -1851,6 +2075,7 @@
 
       let filtered = allOnlineUsers.filter(user => {
         if (!user || !user.profile || user.id === currentSocketId) return false;
+        if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
         const p = user.profile;
         const age = parseInt(p.age) || 0;
 
@@ -1967,7 +2192,11 @@
       if (!container) return;
       container.innerHTML = '';
       const myId = socket ? socket.id : null;
-      const others = allOnlineUsers.filter(user => !(myId && user.id === myId));
+      const others = allOnlineUsers.filter(user => {
+        if (myId && user.id === myId) return false;
+        if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
+        return true;
+      });
       if (others.length === 0) {
         container.innerHTML = '<div class="text-[11px] theme-muted text-center py-4 px-2">No one else online yet. Open another browser or invite a friend!</div>';
         return;
@@ -2045,6 +2274,8 @@
       // Show chat area
       chatPlaceholder.classList.add('hidden');
       activeChatArea.classList.remove('hidden');
+      // Mobile: switch from list pane to full chat pane
+      if (isMobileLayout()) setMobileChatOpen(true);
 
       // Header with gender color (leaf / peach)
       const headerProf = chatData.partnerProfile;
@@ -2053,16 +2284,16 @@
         : (headerProf.gender === 'female' ? 'color:var(--pine-peach)' : '');
 
       activeChatHeader.innerHTML = `
-        <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 w-full">
           <div class="relative flex-shrink-0">
             ${headerProf.image 
-              ? `<img src="${escapeHtml(headerProf.image)}" class="w-9 h-9 rounded-full object-cover ring-2 ring-gray-200" alt="" />` 
-              : `<div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-user text-lg theme-muted"></i></div>`}
+              ? `<img src="${escapeHtml(headerProf.image)}" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover ring-2 ring-gray-200" alt="" />` 
+              : `<div class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-user text-sm sm:text-lg theme-muted"></i></div>`}
           </div>
-          <div class="min-w-0">
-            <div class="font-semibold text-base truncate" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}</div>
-            <div class="text-xs theme-muted -mt-0.5 truncate">${escapeHtml(headerProf.age != null ? String(headerProf.age) : '?')} • ${escapeHtml(headerProf.location || 'Unknown')}</div>
-            ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold text-sm sm:text-base truncate" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}</div>
+            <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${escapeHtml(headerProf.age != null ? String(headerProf.age) : '?')} • ${escapeHtml(headerProf.location || 'Unknown')}</div>
+            ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate hidden sm:block">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
           </div>
         </div>
       `;
@@ -2134,6 +2365,8 @@
       activeChatId = null;
       if (chatPlaceholder) chatPlaceholder.classList.remove('hidden');
       if (activeChatArea) activeChatArea.classList.add('hidden');
+      // Mobile: return to online users list
+      setMobileChatOpen(false);
       renderSidebarUsers();
       updateChatLimitStatus();
     }
@@ -2752,15 +2985,33 @@
         });
       }
 
-      // Show placeholder stats on first load
-      setTimeout(() => {
-        if (!statsEl.classList.contains('hidden')) return;
-        if (onlineCountEl.textContent === '0') {
-          onlineCountEl.textContent = Math.floor(Math.random() * 28) + 14;
-          chattingCountEl.textContent = Math.floor(Math.random() * 9) + 3;
-          statsEl.classList.remove('hidden');
-        }
-      }, 1800);
+      // Real stats only — never invent fake online counts
+      if (onlineCountEl) onlineCountEl.textContent = '0';
+      const mobileCountInit = document.getElementById('online-count-mobile');
+      if (mobileCountInit) mobileCountInit.textContent = '0';
+      if (chattingCountEl) chattingCountEl.textContent = '0 chatting';
+      if (statsEl) statsEl.classList.remove('hidden');
+
+      // Mobile: back to user list from chat
+      const mobileBackBtn = document.getElementById('mobile-back-to-list');
+      if (mobileBackBtn && !mobileBackBtn.dataset.bound) {
+        mobileBackBtn.dataset.bound = '1';
+        mobileBackBtn.addEventListener('click', () => {
+          closeCurrentChat();
+        });
+      }
+
+      // Keep layout correct if user rotates device
+      if (!window._pcResizeBound) {
+        window._pcResizeBound = true;
+        window.addEventListener('resize', () => {
+          if (!isMobileLayout()) {
+            setMobileChatOpen(false);
+          } else if (activeChatId && currentState === 'hub') {
+            setMobileChatOpen(true);
+          }
+        });
+      }
 
       // Initial render of online list on homepage
       renderStartOnlineList();

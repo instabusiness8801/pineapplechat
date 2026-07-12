@@ -100,12 +100,16 @@ io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
   function broadcastStats() {
-    const connected = io.engine.clientsCount;
+    // Count only users who completed profile (not bare page connections / extra tabs)
+    const online = onlineUsers.size;
     const inChat = pairs.size / 2;
-    io.emit('stats', { online: connected, chatting: Math.floor(inChat) });
+    io.emit('stats', { online, chatting: Math.floor(inChat) });
   }
 
+  // Send accurate counts immediately (usually 0 until someone logs in)
   broadcastStats();
+  // Also push current online list so clients don't show stale demos
+  broadcastOnlineUsers();
 
   // User sets their profile and becomes visible in the online list
   socket.on('set-profile', (profile) => {
