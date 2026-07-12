@@ -1466,13 +1466,37 @@
     function connectSocket() {
       if (socket) return socket;
 
+      // polling + websocket: more reliable on mobile / cellular / some tablets
       socket = io({
-        transports: ['websocket'],
-        reconnection: true
+        path: '/socket.io',
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 800,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
       });
 
       socket.on('connect', () => {
-        console.log('%c[client] Connected to server', 'color:#64748b');
+        console.log('%c[client] Connected', 'color:#64748b', socket.id);
+        // Critical: after reconnect mobile often gets a NEW socket id — re-register profile
+        if (currentProfile) {
+          socket.emit('set-profile', currentProfile);
+        }
+        socket.emit('request-online-users');
+      });
+
+      socket.on('disconnect', (reason) => {
+        console.log('%c[client] Disconnected', 'color:#b45309', reason);
+      });
+
+      socket.on('reconnect', () => {
+        console.log('%c[client] Reconnected', 'color:#64748b', socket.id);
+        if (currentProfile) {
+          socket.emit('set-profile', currentProfile);
+        }
+        socket.emit('request-online-users');
       });
 
       socket.on('stats', ({ online, chatting }) => {
@@ -1488,21 +1512,19 @@
       });
 
       socket.on('online-users', (users) => {
-        const real = users || [];
+        const real = Array.isArray(users) ? users : [];
         const demos = getDemoUsers();
-        const demoIds = demos.map(u => u.id);
+        const demoIds = new Set(demos.map(u => u.id));
         const myId = socket ? socket.id : null;
         allOnlineUsers = [
           ...demos,
-          ...real.filter(u => !demoIds.includes(u.id) && (!myId || u.id !== myId))
+          ...real.filter(u => u && u.id && !demoIds.has(u.id) && u.id !== myId && u.profile)
         ];
+        // Always refresh whichever list is visible
         if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
           renderSidebarUsers();
-        } else if (currentState === 'start') {
-          renderStartOnlineList();
-        } else {
-          renderStartOnlineList();
         }
+        renderStartOnlineList();
       });
 
       socket.on('chat-started', (data) => {
@@ -1861,9 +1883,12 @@
     }
 
     function refreshOnlineList() {
-      if (socket && currentProfile) {
+      if (!socket) return;
+      if (currentProfile && socket.connected) {
+        // Re-assert presence (also refreshes server-side socket registration)
         socket.emit('set-profile', currentProfile);
       }
+      socket.emit('request-online-users');
     }
 
     function updateFilters() {
@@ -2682,9 +2707,10 @@
           });
 
           s.once('profile-accepted', () => {
-            // Success: proceed to hub
+            // Success: proceed to hub and pull latest online list
             currentFilters = { gender: 'all', minAge: MIN_AGE, maxAge: MAX_AGE, country: '', city: '' };
             showScreen('hub');
+            if (s && s.connected) s.emit('request-online-users');
           });
 
           s.emit('set-profile', currentProfile);

@@ -52,24 +52,29 @@ function isValidLocation(country, city) {
 }
 
 // State
-const onlineUsers = new Map(); // socketId -> { profile, socket }
-const pairs = new Map(); // legacy, kept for backward but not used for exclusive
+// onlineUsers: socketId -> { profile }  (always resolve live socket via io.sockets.sockets)
+const onlineUsers = new Map();
+const pairs = new Map(); // socketId -> partnerSocketId (legacy pairing ids)
 const blockedUsers = new Map(); // socketId -> Set<blockedSocketIds>
 
-function getPartner(socketId) {
+function getLiveSocket(socketId) {
+  if (!socketId) return null;
+  const s = io.sockets.sockets.get(socketId);
+  return s && s.connected ? s : null;
+}
+
+function getPartnerId(socketId) {
   return pairs.get(socketId) || null;
 }
 
 function pairUsers(socketA, socketB) {
-  pairs.set(socketA.id, socketB);
-  pairs.set(socketB.id, socketA);
+  pairs.set(socketA.id, socketB.id);
+  pairs.set(socketB.id, socketA.id);
 }
 
 function unpair(socketId) {
-  const partner = pairs.get(socketId);
-  if (partner) {
-    pairs.delete(partner.id);
-  }
+  const partnerId = pairs.get(socketId);
+  if (partnerId) pairs.delete(partnerId);
   pairs.delete(socketId);
 }
 
@@ -81,35 +86,54 @@ function isBlocked(userA, userB) {
   return false;
 }
 
-// Broadcast current online users (excluding sensitive data)
-function broadcastOnlineUsers() {
+// Prune offline entries, then build the public online list
+function buildOnlineList() {
+  for (const [id] of onlineUsers.entries()) {
+    if (!getLiveSocket(id)) onlineUsers.delete(id);
+  }
   const list = [];
   for (const [id, data] of onlineUsers.entries()) {
-    if (data.socket && data.socket.connected) {
-      list.push({
-        id: id,
-        profile: data.profile
-      });
+    list.push({ id, profile: data.profile });
+  }
+  return list;
+}
+
+function broadcastOnlineUsers() {
+  io.emit('online-users', buildOnlineList());
+}
+
+function broadcastStats() {
+  buildOnlineList(); // prune first
+  const online = onlineUsers.size;
+  let chattingPairs = 0;
+  const seen = new Set();
+  for (const [a, b] of pairs.entries()) {
+    if (seen.has(a) || seen.has(b)) continue;
+    if (onlineUsers.has(a) && onlineUsers.has(b)) {
+      chattingPairs += 1;
+      seen.add(a);
+      seen.add(b);
     }
   }
-  // Send to all connected clients
-  io.emit('online-users', list);
+  io.emit('stats', { online, chatting: chattingPairs });
 }
 
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
-  function broadcastStats() {
-    // Count only users who completed profile (not bare page connections / extra tabs)
-    const online = onlineUsers.size;
-    const inChat = pairs.size / 2;
-    io.emit('stats', { online, chatting: Math.floor(inChat) });
-  }
-
-  // Send accurate counts immediately (usually 0 until someone logs in)
+  // Send accurate snapshot immediately so late joiners see who is already online
+  socket.emit('online-users', buildOnlineList());
+  socket.emit('stats', {
+    online: onlineUsers.size,
+    chatting: 0
+  });
   broadcastStats();
-  // Also push current online list so clients don't show stale demos
-  broadcastOnlineUsers();
+
+  // Client can pull a fresh list anytime (e.g. after reconnect / opening hub)
+  socket.on('request-online-users', () => {
+    socket.emit('online-users', buildOnlineList());
+    broadcastStats();
+  });
 
   // User sets their profile and becomes visible in the online list
   socket.on('set-profile', (profile) => {
@@ -205,17 +229,19 @@ io.on('connection', (socket) => {
 
     socket.profile = cleanedProfile;
 
-    // Add or update in online list
+    // Add or update in online list (profile only — live socket resolved via id)
     onlineUsers.set(socket.id, {
-      profile: socket.profile,
-      socket: socket
+      profile: socket.profile
     });
 
-    socket.emit('profile-accepted');
+    socket.emit('profile-accepted', { id: socket.id });
 
-    // Broadcast updated list to everyone
-    broadcastOnlineUsers();
+    // Send full list to this client first, then everyone (fixes late-join / mobile race)
+    const list = buildOnlineList();
+    socket.emit('online-users', list);
+    io.emit('online-users', list);
     broadcastStats();
+    console.log(`[profile] ${cleanedProfile.username} (${socket.id}) online=${onlineUsers.size}`);
   });
 
   // User explicitly chooses someone to chat with (no auto matching)
@@ -223,23 +249,26 @@ io.on('connection', (socket) => {
     const targetId = data && data.targetId;
     if (!targetId || targetId === socket.id) return;
 
-    const targetData = onlineUsers.get(targetId);
-    if (!targetData || !targetData.socket || !targetData.socket.connected) {
-      socket.emit('chat-error', { message: 'That user is no longer online.' });
+    if (!onlineUsers.has(socket.id) || !socket.profile) {
+      socket.emit('chat-error', { message: 'Please complete your profile first.' });
       return;
     }
 
-    const targetSocket = targetData.socket;
+    const targetSocket = getLiveSocket(targetId);
+    const targetData = onlineUsers.get(targetId);
+    if (!targetSocket || !targetData) {
+      socket.emit('chat-error', { message: 'That user is no longer online.' });
+      broadcastOnlineUsers();
+      return;
+    }
 
     if (isBlocked(socket.id, targetId)) {
       socket.emit('chat-error', { message: 'You have blocked this user or they have blocked you.' });
       return;
     }
 
-    // Support multiple simultaneous chats - do NOT unpair previous chats
-    // Notify both sides to open/switch to this specific chat
-    const myProfile = socket.profile;
-    const theirProfile = targetSocket.profile;
+    const myProfile = socket.profile || (onlineUsers.get(socket.id) && onlineUsers.get(socket.id).profile);
+    const theirProfile = targetData.profile;
 
     socket.emit('chat-started', { partnerId: targetId, partnerProfile: theirProfile });
     targetSocket.emit('chat-started', { partnerId: socket.id, partnerProfile: myProfile });
@@ -252,9 +281,11 @@ io.on('connection', (socket) => {
     const text = data && data.text;
     if (!targetId || typeof text !== 'string') return;
 
-    const targetData = onlineUsers.get(targetId);
-    const targetSocket = targetData && targetData.socket;
-    if (!targetSocket) return;
+    const targetSocket = getLiveSocket(targetId);
+    if (!targetSocket || !onlineUsers.has(targetId)) {
+      socket.emit('chat-error', { message: 'Message not delivered — that user is offline.' });
+      return;
+    }
 
     if (isBlocked(socket.id, targetId)) return;
 
@@ -265,21 +296,15 @@ io.on('connection', (socket) => {
       return;
     }
     const clean = check.text;
-
-    // Include senderId so client can route message to the correct chat
-    targetSocket.emit('receive-message', {
+    const payload = {
       text: clean,
-      fromSelf: false,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id
-    });
+    };
 
-    socket.emit('receive-message', {
-      text: clean,
-      fromSelf: true,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      senderId: socket.id
-    });
+    // Deliver to recipient (fromSelf false) and confirm to sender (fromSelf true)
+    targetSocket.emit('receive-message', { ...payload, fromSelf: false });
+    socket.emit('receive-message', { ...payload, fromSelf: true });
   });
 
   socket.on('send-attachment-to', (data) => {
@@ -287,9 +312,11 @@ io.on('connection', (socket) => {
     const attachment = data && data.attachment; // { data: base64, type: mime, name }
     if (!targetId || !attachment || !attachment.data) return;
 
-    const targetData = onlineUsers.get(targetId);
-    const targetSocket = targetData && targetData.socket;
-    if (!targetSocket) return;
+    const targetSocket = getLiveSocket(targetId);
+    if (!targetSocket || !onlineUsers.has(targetId)) {
+      socket.emit('chat-error', { message: 'Attachment not delivered — that user is offline.' });
+      return;
+    }
 
     if (isBlocked(socket.id, targetId)) return;
 
@@ -299,29 +326,21 @@ io.on('connection', (socket) => {
       return;
     }
 
-    targetSocket.emit('receive-attachment', {
+    const payload = {
       attachment,
-      fromSelf: false,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id
-    });
-
-    socket.emit('receive-attachment', {
-      attachment,
-      fromSelf: true,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      senderId: socket.id
-    });
+    };
+    targetSocket.emit('receive-attachment', { ...payload, fromSelf: false });
+    socket.emit('receive-attachment', { ...payload, fromSelf: true });
   });
 
   socket.on('next-stranger', () => {
-    // Legacy - for multi-chat we use specific leave
     socket.emit('back-to-browse');
     broadcastStats();
   });
 
   socket.on('end-chat', () => {
-    // Legacy single end
     socket.emit('chat-ended');
     broadcastStats();
   });
@@ -330,12 +349,10 @@ io.on('connection', (socket) => {
     const targetId = data && data.targetId;
     if (!targetId) return;
 
-    const targetData = onlineUsers.get(targetId);
-    const targetSocket = targetData && targetData.socket;
+    const targetSocket = getLiveSocket(targetId);
     if (targetSocket) {
       targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id });
     }
-    // Notify self too
     socket.emit('chat-left', { by: socket.id, partnerId: targetId });
   });
 
@@ -348,41 +365,54 @@ io.on('connection', (socket) => {
     }
     blockedUsers.get(socket.id).add(targetId);
 
-    // Also leave the chat
-    const targetData = onlineUsers.get(targetId);
-    if (targetData && targetData.socket) {
-      targetData.socket.emit('chat-left', { by: socket.id, partnerId: socket.id, blocked: true });
+    const targetSocket = getLiveSocket(targetId);
+    if (targetSocket) {
+      targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id, blocked: true });
     }
     socket.emit('chat-left', { by: socket.id, partnerId: targetId, blocked: true });
   });
 
-  socket.on('disconnect', () => {
-    console.log(`[disconnect] ${socket.id}`);
+  socket.on('disconnect', (reason) => {
+    console.log(`[disconnect] ${socket.id} (${reason})`);
 
-    // Remove from online list
     onlineUsers.delete(socket.id);
+    blockedUsers.delete(socket.id);
 
-    // Notify others
     broadcastOnlineUsers();
 
-    const partner = getPartner(socket.id);
-    if (partner && partner.connected) {
-      partner.emit('partner-left', { reason: 'disconnected' });
-      unpair(partner.id);
+    const partnerId = getPartnerId(socket.id);
+    if (partnerId) {
+      const partner = getLiveSocket(partnerId);
+      if (partner) partner.emit('partner-left', { reason: 'disconnected', partnerId: socket.id });
+      unpair(partnerId);
     }
     unpair(socket.id);
     broadcastStats();
   });
 
-  // Typing indicators
-  socket.on('typing', () => {
-    const partner = getPartner(socket.id);
-    if (partner) partner.emit('typing');
+  // Typing indicators (to active partner id if client sends targetId)
+  socket.on('typing', (data) => {
+    const targetId = data && data.targetId;
+    if (targetId) {
+      const t = getLiveSocket(targetId);
+      if (t) t.emit('typing', { fromId: socket.id });
+      return;
+    }
+    const partnerId = getPartnerId(socket.id);
+    const partner = getLiveSocket(partnerId);
+    if (partner) partner.emit('typing', { fromId: socket.id });
   });
 
-  socket.on('stop-typing', () => {
-    const partner = getPartner(socket.id);
-    if (partner) partner.emit('stop-typing');
+  socket.on('stop-typing', (data) => {
+    const targetId = data && data.targetId;
+    if (targetId) {
+      const t = getLiveSocket(targetId);
+      if (t) t.emit('stop-typing', { fromId: socket.id });
+      return;
+    }
+    const partnerId = getPartnerId(socket.id);
+    const partner = getLiveSocket(partnerId);
+    if (partner) partner.emit('stop-typing', { fromId: socket.id });
   });
 });
 
