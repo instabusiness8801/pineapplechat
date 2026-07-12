@@ -1,0 +1,2772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PineappleChat • Talk to Strangers</title>
+  <!-- Apply saved theme before paint (avoids light/dark flash) -->
+  <script>
+    (function () {
+      try {
+        // Default is always white/light; dark only if user explicitly chose it
+        var t = localStorage.getItem('pineapplechat-theme') || localStorage.getItem('ichat-theme');
+        if (t !== 'dark') t = 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        document.documentElement.classList.toggle('dark', t === 'dark');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.documentElement.classList.remove('dark');
+      }
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' };
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap');
+    
+    /* ========== LIGHT — white bg · soft yellow fields · soft green fields ========== */
+    :root,
+    html[data-theme="light"] {
+      --pine-cream: #FFFFFF;
+      --pine-gold: #F5D76E;
+      --pine-gold-deep: #E8C547;
+      --pine-leaf: #8FBC8F;
+      --pine-leaf-deep: #7AAD7A;
+      --pine-honey: #FFF4C2;
+      --pine-peach: #F5D0B5;
+      --pine-sand: #FFF8E7;
+      --g-blue: #A8C5A8;
+      --g-red: #E8B0A0;
+      --g-yellow: #F5D76E;
+      --g-green: #8FBC8F;
+      --g-teal: #8FBC8F;
+      --g-coral: #F0C4A8;
+      --g-purple: #C4B8A8;
+      --primary: #E8C547;
+      --primary-hover: #D4B03A;
+      --accent-warm: #F5D76E;
+      --accent-coral: #F0C4A8;
+      /* Page: pure white */
+      --bg: #FFFFFF;
+      --surface: #FFFFFF;
+      /* Soft yellow surfaces / fields */
+      --surface-2: #FFF8E1;
+      --field-yellow: #FFF8E1;
+      --field-green: #E8F5E9;
+      --text: #3D3D3D;
+      --text-strong: #2A2A2A;
+      --muted: #6B7280;
+      --border: #E8E0D0;
+      --input-bg: #FFF8E1;
+      --bubble-self: linear-gradient(135deg, #F5D76E 0%, #E8C547 100%);
+      --bubble-self-solid: #F5D76E;
+      --bubble-other: #E8F5E9;
+      --bubble-other-text: #2A3D2A;
+      --scroll-track: #F5F5F5;
+      --scroll-thumb: #D4C9A8;
+      --nav-bg: rgba(255, 255, 255, 0.98);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(232, 197, 71, 0.08);
+      --hover-row: #FFF8E1;
+      --active-row: #E8F5E9;
+      --chip-yellow: #FFF8E1;
+      --chip-teal: #E8F5E9;
+      --chip-green: #E8F5E9;
+      --chip-coral: #FFF3E0;
+      color-scheme: light;
+    }
+
+    /* ========== DARK — warm pineapple night ========== */
+    html[data-theme="dark"],
+    html.dark {
+      --pine-cream: #2A241C;
+      --pine-gold: #E0B84E;
+      --pine-gold-deep: #C9A227;
+      --pine-leaf: #8FBC8F;
+      --pine-leaf-deep: #6B9B6E;
+      --pine-honey: #C9A84A;
+      --pine-peach: #D4A88C;
+      --pine-sand: #3D3429;
+      --g-blue: #9BB8D4;
+      --g-red: #E8B0A0;
+      --g-yellow: #E0B84E;
+      --g-green: #8FBC8F;
+      --g-teal: #8FB8A8;
+      --g-coral: #E8B0A0;
+      --g-purple: #C4B0D4;
+      --primary: #E0B84E;
+      --primary-hover: #F0C85E;
+      --accent-warm: #E0B84E;
+      --accent-coral: #E8B0A0;
+      --bg: #1C1814;
+      --surface: #2A241C;
+      --surface-2: #3D3429;
+      --text: #F0E6D8;
+      --text-strong: #FFF9F0;
+      --muted: #A89880;
+      --border: #4A4035;
+      --input-bg: #3D3429;
+      --field-yellow: #3D3828;
+      --field-green: #2A3D30;
+      --bubble-self: linear-gradient(135deg, #C9A227 0%, #8FBC8F 100%);
+      --bubble-self-solid: #C9A227;
+      --bubble-other: #2A3D30;
+      --bubble-other-text: #F5EDE0;
+      --scroll-track: #1C1814;
+      --scroll-thumb: #5A4E40;
+      --nav-bg: rgba(42, 36, 28, 0.96);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --hover-row: #3D3429;
+      --active-row: #4A3F28;
+      --chip-yellow: #4A3F28;
+      --chip-teal: #2A3D30;
+      --chip-green: #2A3D30;
+      --chip-coral: #4A322C;
+      color-scheme: dark;
+    }
+    
+    body {
+      font-family: 'Inter', system_ui, sans-serif;
+      background: var(--bg) !important;
+      color: var(--text) !important;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+    
+    .logo-font {
+      font-family: 'Space Grotesk', 'Inter', system_ui, sans-serif;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    /* PineappleChat logo — soft gold + leaf green rhythm */
+    .logo-word {
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+    .logo-pine { color: var(--pine-gold-deep); }
+    .logo-chat { color: var(--pine-leaf); }
+    .logo-icon {
+      background: linear-gradient(145deg, var(--pine-leaf) 0%, var(--pine-gold) 55%, var(--pine-honey) 100%);
+    }
+
+    .btn-primary-g {
+      background: linear-gradient(135deg, var(--pine-gold) 0%, var(--pine-gold-deep) 100%) !important;
+      color: #2A231C !important;
+      border: none !important;
+    }
+    .btn-primary-g:hover {
+      filter: brightness(1.05);
+      background: linear-gradient(135deg, var(--primary-hover) 0%, var(--pine-leaf) 100%) !important;
+      color: #fff !important;
+    }
+    html[data-theme="dark"] .btn-primary-g {
+      color: #1C1814 !important;
+    }
+    html[data-theme="dark"] .btn-primary-g:hover {
+      color: #1C1814 !important;
+    }
+
+    .btn-accent-yellow {
+      background: var(--pine-gold) !important;
+      color: #2A231C !important;
+    }
+    .btn-accent-teal {
+      background: var(--pine-leaf) !important;
+      color: #fff !important;
+    }
+
+    .google-bar,
+    .pineapple-bar {
+      height: 4px;
+      width: 100%;
+      background: linear-gradient(90deg,
+        var(--pine-leaf) 0%,
+        var(--pine-gold) 40%,
+        var(--pine-honey) 70%,
+        var(--pine-peach) 100%);
+    }
+
+    .surface-card {
+      background: var(--surface) !important;
+      border: 1px solid var(--border) !important;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+    /* Soft pineapple-toned card accents */
+    .surface-card.card-teal { border-top: 3px solid var(--pine-leaf); }
+    .surface-card.card-yellow { border-top: 3px solid var(--pine-gold); }
+    .surface-card.card-blue { border-top: 3px solid var(--pine-leaf-deep); }
+    .surface-card.card-coral { border-top: 3px solid var(--pine-peach); }
+    .surface-card.card-green { border-top: 3px solid var(--pine-leaf); }
+
+    .chip-yellow {
+      background: var(--chip-yellow) !important;
+      color: var(--text-strong) !important;
+      border: 1px solid color-mix(in srgb, var(--pine-gold) 40%, transparent);
+    }
+    .chip-teal {
+      background: var(--chip-green) !important;
+      color: var(--text-strong) !important;
+      border: 1px solid color-mix(in srgb, var(--pine-leaf) 35%, transparent);
+    }
+    .chip-green {
+      background: var(--chip-green) !important;
+      color: var(--text-strong) !important;
+      border: 1px solid color-mix(in srgb, var(--pine-leaf) 35%, transparent);
+    }
+    .chip-coral {
+      background: var(--chip-coral) !important;
+      color: var(--text-strong) !important;
+      border: 1px solid color-mix(in srgb, var(--pine-peach) 45%, transparent);
+    }
+
+    .accent-icon-wrap {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--pine-honey) 35%, white), color-mix(in srgb, var(--pine-leaf) 15%, white));
+      border: 1px solid color-mix(in srgb, var(--pine-gold) 30%, transparent);
+    }
+    html[data-theme="dark"] .accent-icon-wrap {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--pine-gold) 20%, #2A241C), color-mix(in srgb, var(--pine-leaf) 15%, #2A241C));
+    }
+
+    /* Gender: leaf green (male) · soft peach (female) */
+    .gender-pill-male.peer-checked,
+    .peer:checked + .gender-pill-male {
+      background: var(--pine-leaf) !important;
+      border-color: var(--pine-leaf) !important;
+      color: #fff !important;
+    }
+    .peer:checked + .gender-pill-female {
+      background: var(--pine-peach) !important;
+      border-color: var(--pine-peach) !important;
+      color: #2A231C !important;
+    }
+
+    /* Filter active chips */
+    .gender-filter-btn.is-active-all {
+      background: linear-gradient(135deg, var(--pine-gold), var(--pine-leaf)) !important;
+      color: #2A231C !important;
+      border-color: transparent !important;
+    }
+    .gender-filter-btn.is-active-male {
+      background: var(--pine-leaf) !important;
+      color: #fff !important;
+      border-color: transparent !important;
+    }
+    .gender-filter-btn.is-active-female {
+      background: var(--pine-peach) !important;
+      color: #2A231C !important;
+      border-color: transparent !important;
+    }
+
+    .focus-ring-colorful:focus {
+      border-color: var(--pine-gold) !important;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--pine-gold) 28%, transparent),
+                  0 0 0 6px color-mix(in srgb, var(--pine-leaf) 12%, transparent) !important;
+      outline: none !important;
+    }
+
+    /* Online user rows by gender */
+    .user-row-male {
+      background: #E3F2FD !important; /* soft blue */
+      border: 1px solid #BBDEFB;
+    }
+    .user-row-male:hover {
+      background: #BBDEFB !important;
+    }
+    .user-row-female {
+      background: #FCE4EC !important; /* soft pink */
+      border: 1px solid #F8BBD9;
+    }
+    .user-row-female:hover {
+      background: #F8BBD9 !important;
+    }
+    html[data-theme="dark"] .user-row-male {
+      background: #1e3a5f !important;
+      border-color: #2a4a6f;
+    }
+    html[data-theme="dark"] .user-row-male:hover {
+      background: #2a4a6f !important;
+    }
+    html[data-theme="dark"] .user-row-female {
+      background: #4a2a38 !important;
+      border-color: #5a3a48;
+    }
+    html[data-theme="dark"] .user-row-female:hover {
+      background: #5a3a48 !important;
+    }
+    .user-row-male.user-row-active,
+    .user-row-female.user-row-active {
+      box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pine-gold) 55%, transparent);
+    }
+
+    .theme-nav {
+      background: var(--nav-bg) !important;
+      border-color: var(--border) !important;
+    }
+
+    .theme-chat-bg {
+      background: #FFFFFF !important;
+    }
+    html[data-theme="dark"] .theme-chat-bg {
+      background: var(--bg) !important;
+    }
+
+    .theme-input {
+      background: var(--field-yellow, var(--input-bg)) !important;
+      border-color: var(--border) !important;
+      color: var(--text) !important;
+    }
+    /* Soft green fields (alternate / secondary) */
+    .theme-input-green,
+    select.theme-input-green,
+    input.theme-input-green {
+      background: var(--field-green, #E8F5E9) !important;
+    }
+
+    .theme-muted { color: var(--muted) !important; }
+    .theme-text { color: var(--text) !important; }
+    .theme-text-strong { color: var(--text-strong) !important; }
+    .theme-border { border-color: var(--border) !important; }
+    .theme-surface { background: var(--surface) !important; }
+    .theme-surface-2 { background: var(--surface-2) !important; }
+    .theme-field-yellow { background: var(--field-yellow, #FFF8E1) !important; }
+    .theme-field-green { background: var(--field-green, #E8F5E9) !important; }
+
+    .chat-container {
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .message-bubble {
+      max-width: 75%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      position: relative;
+      word-wrap: break-word;
+      line-height: 1.4;
+    }
+
+    .message-self {
+      background: var(--bubble-self);
+      background-color: var(--bubble-self-solid);
+      color: #2A231C;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--pine-gold) 30%, transparent);
+    }
+
+    .message-stranger {
+      background: var(--bubble-other);
+      color: var(--bubble-other-text);
+      border-bottom-left-radius: 4px;
+      border: 1px solid color-mix(in srgb, var(--pine-sand) 80%, transparent);
+    }
+
+    /* Chat pane: keep input visible when large images load */
+    .chat-pane {
+      min-height: 0;
+      min-width: 0;
+    }
+    .chat-pane-body {
+      min-height: 0;
+      overflow: hidden;
+    }
+    .chat-messages-scroll {
+      min-height: 0;
+      flex: 1 1 auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chat-composer {
+      flex-shrink: 0;
+    }
+    .chat-attach-wrap {
+      max-width: min(70%, 280px);
+      min-width: 0;
+    }
+    .chat-attach-media {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      max-height: 220px;
+      height: auto;
+      object-fit: contain;
+      border-radius: 0.5rem;
+      background: rgba(0, 0, 0, 0.04);
+    }
+    .attach-self {
+      background: linear-gradient(135deg, var(--pine-gold), var(--pine-leaf)) !important;
+    }
+    .attach-other {
+      background: var(--chip-yellow) !important;
+      border: 1px solid color-mix(in srgb, var(--pine-gold) 35%, transparent);
+    }
+
+    .chat-messages {
+      scrollbar-width: thin;
+      scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+    }
+
+    .chat-messages::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .chat-messages::-webkit-scrollbar-track {
+      background: var(--scroll-track);
+    }
+    
+    .chat-messages::-webkit-scrollbar-thumb {
+      background-color: var(--scroll-thumb);
+      border-radius: 20px;
+    }
+
+    /* Theme toggle button */
+    #theme-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 9999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    }
+    #theme-toggle:hover {
+      background: var(--surface-2);
+    }
+    #theme-toggle:active {
+      transform: scale(0.96);
+    }
+    #theme-toggle .icon-sun { display: none; }
+    #theme-toggle .icon-moon { display: inline-block; }
+    html[data-theme="dark"] #theme-toggle .icon-sun { display: inline-block; }
+    html[data-theme="dark"] #theme-toggle .icon-moon { display: none; }
+
+    /* Dark-mode overrides for Tailwind light utility classes used in markup/JS */
+    html[data-theme="dark"] .bg-white,
+    html[data-theme="dark"] .bg-white\/90,
+    html[data-theme="dark"] .bg-white\/95 {
+      background-color: var(--surface) !important;
+    }
+    html[data-theme="dark"] .bg-gray-50 {
+      background-color: var(--input-bg) !important;
+    }
+    html[data-theme="dark"] .bg-gray-100 {
+      background-color: var(--surface-2) !important;
+    }
+    /* Light mode: force white page areas that still use gray-50 */
+    html[data-theme="light"] body,
+    html:not([data-theme="dark"]) body {
+      background: #FFFFFF !important;
+    }
+    html[data-theme="light"] .bg-gray-50 {
+      background-color: var(--field-yellow) !important;
+    }
+    html[data-theme="dark"] .bg-blue-50 {
+      background-color: rgba(37, 99, 235, 0.15) !important;
+    }
+    html[data-theme="dark"] .bg-red-50 {
+      background-color: rgba(239, 68, 68, 0.12) !important;
+    }
+    html[data-theme="dark"] .hover\:bg-gray-50:hover,
+    html[data-theme="dark"] .hover\:bg-gray-100:hover {
+      background-color: var(--hover-row) !important;
+    }
+    html[data-theme="dark"] .border-gray-200,
+    html[data-theme="dark"] .border-gray-300 {
+      border-color: var(--border) !important;
+    }
+    html[data-theme="dark"] .border-blue-100 {
+      border-color: rgba(96, 165, 250, 0.25) !important;
+    }
+    html[data-theme="dark"] .text-gray-900,
+    html[data-theme="dark"] .text-gray-800,
+    html[data-theme="dark"] .text-gray-700 {
+      color: var(--text-strong) !important;
+    }
+    html[data-theme="dark"] .text-gray-500,
+    html[data-theme="dark"] .text-gray-400 {
+      color: var(--muted) !important;
+    }
+    html[data-theme="dark"] .placeholder\:text-gray-400::placeholder,
+    html[data-theme="dark"] .placeholder\:text-gray-500::placeholder {
+      color: #6b7280 !important;
+    }
+    html[data-theme="dark"] .ring-gray-200 {
+      --tw-ring-color: #374151 !important;
+    }
+    html[data-theme="dark"] .shadow-sm,
+    html[data-theme="dark"] .shadow-md,
+    html[data-theme="dark"] .shadow-lg,
+    html[data-theme="dark"] .shadow-xl {
+      --tw-shadow-color: rgba(0, 0, 0, 0.4);
+    }
+    html[data-theme="dark"] select option {
+      background: var(--surface);
+      color: var(--text);
+    }
+    html[data-theme="dark"] #global-emoji-picker {
+      background: var(--surface) !important;
+      border-color: var(--border) !important;
+      color: var(--text);
+    }
+
+    .stranger-chat {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .screen {
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .status-dot {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .message-enter {
+      animation: messagePop 0.15s ease-out forwards;
+    }
+
+    @keyframes messagePop {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .waiting-dots::after {
+      content: '';
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: ''; }
+      40% { content: '.'; }
+      60% { content: '..'; }
+      80%, 100% { content: '...'; }
+    }
+
+    .stranger-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+  <!-- Top Nav -->
+  <nav class="theme-nav border-b sticky top-0 z-50 shadow-sm backdrop-blur-lg">
+    <div class="pineapple-bar"></div>
+    <div class="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-x-3">
+        <div class="w-9 h-9 logo-icon rounded-xl flex items-center justify-center shadow-md" title="PineappleChat">
+          <span class="text-lg leading-none" aria-hidden="true">🍍</span>
+        </div>
+        <div class="logo-font logo-word" aria-label="PineappleChat">
+          <span class="logo-pine">Pineapple</span><span class="logo-chat">Chat</span>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-x-3 sm:gap-x-4 text-sm">
+        <div id="stats" 
+             class="hidden sm:flex items-center gap-x-2 theme-surface border theme-border px-3.5 py-1 rounded-full text-xs">
+          <div class="flex items-center gap-x-1.5">
+            <div class="w-2 h-2 rounded-full status-dot" style="background:var(--pine-leaf)"></div>
+            <span id="online-count" class="font-medium" style="color:var(--pine-leaf)">0</span>
+            <span class="theme-muted">online</span>
+          </div>
+          <div class="w-px h-3 theme-surface-2"></div>
+          <span id="chatting-count" class="font-medium theme-muted">0 chatting</span>
+        </div>
+
+        <button type="button" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <i class="fa-solid fa-moon icon-moon text-sm"></i>
+          <i class="fa-solid fa-sun icon-sun text-sm" style="color:var(--pine-gold)"></i>
+        </button>
+        
+        <div class="text-xs theme-muted hidden md:block">
+          100% anonymous
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="max-w-6xl mx-auto px-4 py-8">
+    
+    <!-- PROFILE / START SCREEN - now with left online list -->
+    <div id="start-screen" class="screen flex gap-6 max-w-6xl mx-auto">
+      
+      <!-- Left: Online users list (always visible on homepage) -->
+      <div class="w-80 flex-shrink-0">
+        <div class="surface-card card-teal rounded-3xl p-4 sticky top-4">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold text-sm theme-text-strong">Who's online</h3>
+            <span class="text-[10px] px-2 py-0.5 rounded-full chip-yellow font-medium">Demo + real</span>
+          </div>
+          <div id="start-online-list" class="space-y-1 text-xs max-h-[420px] overflow-auto">
+            <!-- populated by JS -->
+          </div>
+          <p class="text-[9px] text-gray-500 mt-2">Click any user below to chat — but you must fill your details on the right first!</p>
+        </div>
+      </div>
+
+      <!-- Right: Profile form card -->
+      <div class="flex-1">
+        <div class="surface-card card-yellow rounded-3xl p-7">
+          <form id="profile-form" class="space-y-5">
+            <!-- Username -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">USERNAME <span class="text-red-500">*</span></label>
+              <input id="username" type="text" required maxlength="24" placeholder="e.g. AlexRiver" autocomplete="username"
+                     class="w-full theme-input theme-field-yellow border focus-ring-colorful rounded-xl px-4 py-2.5 text-sm outline-none placeholder:text-gray-400">
+            </div>
+
+            <!-- Gender (visible custom UI, still keyboard/tab focusable — no display:none) -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">GENDER <span class="text-red-500">*</span></label>
+              <div class="flex gap-2" role="radiogroup" aria-label="Gender">
+                <label class="flex-1 cursor-pointer relative block">
+                  <input type="radio" name="gender" value="male" required
+                         class="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                  <div class="gender-pill-male border border-gray-300 rounded-xl py-2 text-center text-sm text-gray-700 transition peer-focus-visible:ring-2 peer-focus-visible:ring-teal-400 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white">Male</div>
+                </label>
+                <label class="flex-1 cursor-pointer relative block">
+                  <input type="radio" name="gender" value="female"
+                         class="peer absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                  <div class="gender-pill-female border border-gray-300 rounded-xl py-2 text-center text-sm text-gray-700 transition peer-focus-visible:ring-2 peer-focus-visible:ring-rose-300 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-white">Female</div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Age: 18+ only — locked dropdown (18–99) -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5" for="age">AGE <span class="text-red-500">*</span></label>
+              <select id="age" required aria-describedby="age-hint"
+                      class="w-full theme-input theme-input-green border focus-ring-colorful rounded-xl px-4 py-2.5 text-sm outline-none">
+                <option value="" disabled selected>Select age…</option>
+                <!-- options 18–99 filled by JS -->
+              </select>
+              <div id="age-hint" class="text-[10px] text-gray-500 mt-1">You must be <strong>18 or older</strong> to use PineappleChat (18–99).</div>
+            </div>
+
+            <!-- Location: locked dropdowns (no free-text / fake locations) -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-0.5">LOCATION <span class="text-red-500">*</span></label>
+              <div class="text-[10px] text-gray-500 mb-1.5">Select Country then City from the list (required).</div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <select id="country" required
+                          class="w-full theme-input theme-field-yellow border focus-ring-colorful rounded-xl px-3 py-2 text-sm outline-none">
+                    <option value="" disabled selected>Select country…</option>
+                  </select>
+                </div>
+                <div>
+                  <select id="city" required disabled
+                          class="w-full theme-input theme-input-green border focus-ring-colorful rounded-xl px-3 py-2 text-sm outline-none disabled:opacity-50">
+                    <option value="" disabled selected>Select city…</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- What's on your mind (optional) -->
+            <div class="relative">
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">WHAT'S ON YOUR MIND <span class="text-gray-500">(optional)</span></label>
+              <textarea id="whats-on-mind" maxlength="140" rows="2" placeholder="Something fun or random..."
+                        class="w-full theme-input theme-field-yellow border focus-ring-colorful rounded-xl px-3 py-1.5 text-sm outline-none placeholder:text-gray-400 resize-none"></textarea>
+              <button type="button" id="smiley-btn"
+                      class="absolute bottom-1.5 right-1.5 text-xl leading-none px-1 py-0.5 hover:bg-gray-100 rounded transition"
+                      title="Add smiley">😊</button>
+            </div>
+
+            <!-- Profile Picture (optional): upload own OR pick a matching preset -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">PROFILE PICTURE <span class="text-gray-500">(optional)</span></label>
+
+              <div class="flex items-center gap-4">
+                <div id="image-preview"
+                     class="w-16 h-16 rounded-full theme-field-green border border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-yellow-400 transition"
+                     title="Click to upload your photo"
+                     onclick="document.getElementById('image-input').click()">
+                  <i class="fa-solid fa-user text-3xl text-gray-500" id="preview-icon"></i>
+                  <img id="preview-img" class="w-full h-full object-cover hidden" alt="Your profile preview">
+                </div>
+                <div class="flex-1 min-w-0">
+                  <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" id="upload-photo-btn"
+                            class="px-3 py-1.5 text-xs btn-accent-teal rounded-lg transition inline-flex items-center gap-1.5 shadow-sm">
+                      <i class="fa-solid fa-cloud-arrow-up"></i> Upload your photo
+                    </button>
+                    <button type="button" id="remove-image-btn"
+                            class="px-3 py-1.5 text-xs text-red-500 hover:text-red-600 border border-red-200 hover:border-red-300 rounded-lg hidden transition">
+                      Remove
+                    </button>
+                  </div>
+                  <div class="text-[10px] text-gray-500 mt-1.5">JPG, PNG or WebP • Max 1MB • Or pick an avatar below</div>
+                </div>
+              </div>
+
+              <!-- Preset avatars: each button shows the real image (no mismatched names) -->
+              <div class="mt-3">
+                <div class="text-[10px] text-gray-500 mb-1.5">Or pick an avatar:</div>
+                <div id="avatar-preset-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2">
+                  <!-- filled by JS so image always matches label -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Terms & Safety Agreement (required) -->
+            <div id="terms-box" class="rounded-2xl border theme-border theme-surface-2 p-4 space-y-3">
+              <div class="text-xs font-semibold theme-text-strong flex items-center gap-2">
+                <i class="fa-solid fa-shield-halved" style="color:var(--pine-leaf)"></i>
+                Terms &amp; Safety Agreement <span class="text-red-500">*</span>
+              </div>
+              <p class="text-[10px] theme-muted leading-relaxed">
+                By checking the box below, you confirm you have read and agree to all of the following. This is a private demo / social chat tool; the operator is not responsible for other users’ conduct.
+              </p>
+              <ul class="text-[10px] theme-muted space-y-1.5 list-disc pl-4 leading-relaxed max-h-40 overflow-y-auto pr-1">
+                <li><strong class="theme-text">Age:</strong> I am <strong>18 years of age or older</strong>. I will not use this app if I am under 18, and I will not attempt to contact or engage with anyone I know or suspect is under 18.</li>
+                <li><strong class="theme-text">Personal responsibility:</strong> I chat with strangers at my own risk. I will not share passwords, OTPs, bank details, home address, or other sensitive personal data.</li>
+                <li><strong class="theme-text">No illegal or harmful activity:</strong> I will not use PineappleChat for scams, fraud, harassment, threats, hate, exploitation, trafficking, or any illegal purpose.</li>
+                <li><strong class="theme-text">Content rules:</strong> I will not send links, contact details (email/phone) for solicitation, or prohibited / dangerous language. Automated filters may block such messages.</li>
+                <li><strong class="theme-text">No reliance on moderation:</strong> Filters are best-effort only. PineappleChat does not guarantee continuous monitoring of chats. I will use Leave / Block and stop engaging if someone makes me uncomfortable.</li>
+                <li><strong class="theme-text">Ephemeral / no guarantee of privacy:</strong> Chats are intended to be temporary and may not be stored by the operator, but I understand no online chat is 100% private. Screenshots and device malware are outside the operator’s control.</li>
+                <li><strong class="theme-text">Operator not a party to chats:</strong> The operator of PineappleChat is not a party to conversations between users, does not endorse user content, and is not liable for statements, images, or actions of other users.</li>
+                <li><strong class="theme-text">Limitation of liability:</strong> To the fullest extent permitted by law, the operator is not liable for any loss, harm, distress, or damages arising from use of this app, including interactions with other users or technical outages.</li>
+                <li><strong class="theme-text">Indemnity:</strong> I agree to hold the operator harmless from claims arising from my misuse of the app or my violation of these terms.</li>
+                <li><strong class="theme-text">Right to refuse service:</strong> Access may be restricted, blocked, or discontinued at any time without notice for safety, abuse, or operational reasons.</li>
+                <li><strong class="theme-text">Report serious harm offline:</strong> If I believe I or someone else is in danger, I will contact local emergency services or appropriate authorities — not only this app.</li>
+                <li><strong class="theme-text">Voluntary use:</strong> I use PineappleChat voluntarily, for lawful entertainment/social purposes, and I can stop using it at any time.</li>
+              </ul>
+              <label class="flex items-start gap-2.5 cursor-pointer select-none pt-1">
+                <input id="agree-terms" type="checkbox" required
+                       class="mt-0.5 w-4 h-4 rounded border-gray-300 accent-teal-600 flex-shrink-0">
+                <span class="text-[11px] theme-text leading-snug">
+                  I have read and agree to the Terms &amp; Safety Agreement above. I confirm I am <strong>18+</strong> and accept that the operator is not responsible for other users’ behaviour.
+                </span>
+              </label>
+              <p id="terms-error" class="text-[10px] text-red-500 hidden">You must accept the agreement to continue.</p>
+            </div>
+
+            <button type="submit"
+                    class="mt-2 w-full btn-primary-g transition-all font-semibold py-3.5 px-8 rounded-2xl text-base flex items-center justify-center gap-x-2 shadow-lg shadow-blue-600/25">
+              <i class="fa-solid fa-search"></i>
+              <span>See who's online</span>
+            </button>
+
+            <p class="text-center text-[10px] theme-muted">Be respectful. Report or block unsafe behaviour. 18+ only.</p>
+          </form>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- MULTI-CHAT HUB: Filters on top + List on left + Chat on right -->
+    <div id="chat-hub" class="screen max-w-7xl mx-auto hidden">
+      <!-- Filters on top, separate -->
+      <div class="mb-3 surface-card card-blue rounded-2xl p-3">
+        <div class="flex items-center gap-x-4 gap-y-2 flex-wrap text-xs">
+          <div class="font-medium theme-text-strong mr-1">Filters:</div>
+
+          <!-- Gender -->
+          <div class="flex items-center gap-1">
+            <span class="theme-muted">Gender</span>
+            <div class="flex gap-1" id="sidebar-gender-filters">
+              <button data-gender="all" class="gender-filter-btn is-active-all px-2 py-0.5 rounded text-[10px] border border-transparent">All</button>
+              <button data-gender="male" class="gender-filter-btn px-2 py-0.5 rounded border border-gray-300 text-[10px] theme-text">M</button>
+              <button data-gender="female" class="gender-filter-btn px-2 py-0.5 rounded border border-gray-300 text-[10px] theme-text">F</button>
+            </div>
+          </div>
+
+          <!-- Age filter (separate from profile age field — do not use min= on profile age) -->
+          <div class="flex items-center gap-1">
+            <span class="text-gray-500">Age</span>
+            <input id="sidebar-age-min" type="text" inputmode="numeric" maxlength="2" value="18"
+                   aria-label="Minimum age filter"
+                   class="w-14 theme-field-yellow border border-gray-300 rounded px-1 py-0.5 text-xs">
+            <span class="text-gray-500">-</span>
+            <input id="sidebar-age-max" type="text" inputmode="numeric" maxlength="2" value="99"
+                   aria-label="Maximum age filter"
+                   class="w-14 theme-field-green border border-gray-300 rounded px-1 py-0.5 text-xs">
+          </div>
+
+          <!-- Country -->
+          <div class="flex items-center gap-1">
+            <span class="text-gray-500">Country</span>
+            <select id="sidebar-country-filter"
+                    class="max-w-[9.5rem] theme-field-yellow border border-gray-300 rounded px-2 py-0.5 text-xs">
+              <option value="">All</option>
+            </select>
+          </div>
+
+          <!-- City -->
+          <div class="flex items-center gap-1">
+            <span class="text-gray-500">City</span>
+            <select id="sidebar-city-filter" disabled
+                    class="max-w-[9.5rem] theme-field-green border border-gray-300 rounded px-2 py-0.5 text-xs disabled:opacity-50">
+              <option value="">All</option>
+            </select>
+          </div>
+
+          <button id="refresh-sidebar-btn" class="ml-auto text-xs px-2 py-0.5 border border-gray-300 rounded hover:bg-gray-50">↻ Refresh</button>
+        </div>
+      </div>
+
+      <div class="flex gap-4 h-[calc(72vh-60px)] min-h-0">
+        <!-- Left: Online users list ONLY (no filters above it now) -->
+        <div class="w-72 flex-shrink-0 surface-card card-green rounded-2xl flex flex-col overflow-hidden min-h-0">
+          <div class="p-3 border-b theme-border flex items-center justify-between theme-surface flex-shrink-0">
+            <div>
+              <div class="font-semibold text-sm theme-text-strong">Online</div>
+              <div id="sidebar-count" class="text-[10px] theme-muted">0 online</div>
+            </div>
+          </div>
+          <!-- Users list -->
+          <div id="sidebar-online-list" class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 text-sm theme-surface">
+            <!-- populated by renderSidebarUsers -->
+          </div>
+        </div>
+
+        <!-- Right: Main Chat Area -->
+        <div class="flex-1 flex flex-col surface-card card-coral rounded-2xl overflow-hidden min-h-0 min-w-0 chat-pane">
+          <div id="chat-placeholder" class="flex-1 flex items-center justify-center theme-muted text-sm theme-surface">
+            Select a user from the list on the left to start chatting
+          </div>
+
+          <div id="active-chat-area" class="hidden flex-1 flex flex-col min-h-0 overflow-hidden theme-surface chat-pane-body">
+            <!-- Dynamic chat header — never shrinks away -->
+            <div class="theme-surface border-b theme-border px-4 py-2 flex items-center justify-between flex-shrink-0">
+              <div id="active-chat-header" class="flex items-center gap-3 min-w-0 flex-1">
+                <!-- filled by JS -->
+              </div>
+              <div class="flex gap-2 items-center flex-shrink-0">
+                <button id="leave-chat-btn" title="Leave this chat" class="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded flex items-center gap-1">
+                  <i class="fa-solid fa-door-open"></i>
+                  <span class="hidden sm:inline text-[10px]">Leave</span>
+                </button>
+                <button id="block-user-btn" title="Block this user" class="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded flex items-center gap-1">
+                  <i class="fa-solid fa-ban"></i>
+                  <span class="hidden sm:inline text-[10px]">Block</span>
+                </button>
+                <button id="close-chat-pane-btn" title="Close chat pane" class="text-xs px-3 py-1 border theme-border rounded hover:bg-gray-100 theme-text">Close</button>
+              </div>
+            </div>
+
+            <!-- Messages — scrolls; min-h-0 is required so large images don't hide the composer -->
+            <div id="chat-messages" class="p-4 space-y-3 text-sm chat-messages theme-chat-bg chat-messages-scroll">
+              <!-- messages go here -->
+            </div>
+
+            <div id="typing-indicator" class="hidden px-4 py-1 text-xs theme-muted italic theme-chat-bg flex-shrink-0">Stranger is typing...</div>
+
+            <!-- Input — always pinned at bottom -->
+            <div class="p-3 theme-surface border-t theme-border chat-composer">
+              <form id="multi-chat-form" class="flex gap-2 items-center">
+                <button type="button" id="attach-btn" title="Attach image or video (no links allowed)" class="px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl">
+                  <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <button type="button" id="chat-emoji-btn" title="Add emoji" class="px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl">😊</button>
+                <input id="multi-chat-input" type="text" placeholder="Type a message… (no links or unsafe words)" 
+                       class="flex-1 min-w-0 theme-input theme-field-yellow border focus-ring-colorful rounded-2xl px-4 py-2 text-sm outline-none">
+                <button type="submit" class="btn-primary-g px-5 py-2 rounded-2xl text-sm shadow-sm flex-shrink-0">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
+                <input type="file" id="attachment-input" accept="image/*,video/*" class="hidden">
+              </form>
+              <div id="chat-limit-status" class="text-[10px] mt-1 px-1 theme-muted"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Info footer -->
+    <div class="max-w-md mx-auto mt-8 text-center">
+      <div class="flex justify-center items-center gap-x-2 text-xs text-gray-500">
+        <div class="px-3 py-1 rounded-full chip-teal text-[10px] font-medium">No data is stored</div>
+        <div class="px-3 py-1 rounded-full chip-yellow text-[10px] font-medium">No logs</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/world-locations.js"></script>
+  <script src="/country-iso.js"></script>
+  <script src="/content-safety.js"></script>
+  <script>
+    // Tailwind script
+    function initTailwind() {
+      // Theme CSS variables drive primary color; keep in sync for any legacy use
+      const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() || '#1a73e8';
+      document.documentElement.style.setProperty('--accent', primary);
+    }
+
+    // ---- Theme: light / dark (UX only — no feature logic) ----
+    const THEME_KEY = 'pineapplechat-theme';
+
+    function getPreferredTheme() {
+      // Dark mode is optional — default is always white/light
+      try {
+        const saved = localStorage.getItem(THEME_KEY) || localStorage.getItem('ichat-theme');
+        if (saved === 'dark') return 'dark';
+      } catch (e) { /* ignore */ }
+      return 'light';
+    }
+
+    function applyTheme(theme) {
+      const mode = theme === 'dark' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', mode);
+      document.documentElement.classList.toggle('dark', mode === 'dark');
+      try { localStorage.setItem(THEME_KEY, mode); } catch (e) { /* ignore */ }
+      const btn = document.getElementById('theme-toggle');
+      if (btn) {
+        btn.setAttribute('aria-label', mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+        btn.title = mode === 'dark' ? 'Light mode' : 'Dark mode';
+      }
+      initTailwind();
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || getPreferredTheme();
+      applyTheme(current === 'dark' ? 'light' : 'dark');
+    }
+
+    function initThemeToggle() {
+      applyTheme(getPreferredTheme());
+      const btn = document.getElementById('theme-toggle');
+      if (btn && !btn.dataset.bound) {
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          toggleTheme();
+        });
+      }
+    }
+
+    // State
+    let socket;
+    let currentState = 'start';
+    let isMatched = false; // legacy flag kept for minimal compat in a few spots
+    let typingTimeout = null;
+    let currentProfile = null;
+    let partnerProfile = null;
+
+    // Online users + filters
+    let allOnlineUsers = [];
+    let currentFilters = {
+      gender: 'all',
+      minAge: 18,
+      maxAge: 99,
+      country: '',
+      city: ''
+    };
+
+    // Avatar presets — DiceBear generates the image from seed, so label always matches the picture
+    // Format: style + seed → unique cartoon-style avatar (not random stock photos)
+    const AVATAR_PRESETS = [
+      { id: 'sunny',  label: 'Sunny',  url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=Sunny&size=128' },
+      { id: 'pixel',  label: 'Pixel',  url: 'https://api.dicebear.com/9.x/pixel-art/png?seed=PixelHero&size=128' },
+      { id: 'robot',  label: 'Robot',  url: 'https://api.dicebear.com/9.x/bottts/png?seed=RoboBuddy&size=128' },
+      { id: 'hero',   label: 'Hero',   url: 'https://api.dicebear.com/9.x/adventurer/png?seed=HeroQuest&size=128' },
+      { id: 'nova',   label: 'Nova',   url: 'https://api.dicebear.com/9.x/lorelei/png?seed=NovaStar&size=128' },
+      { id: 'bolt',   label: 'Bolt',   url: 'https://api.dicebear.com/9.x/big-smile/png?seed=BoltFlash&size=128' },
+      { id: 'echo',   label: 'Echo',   url: 'https://api.dicebear.com/9.x/notionists/png?seed=EchoWave&size=128' },
+      { id: 'spark',  label: 'Spark',  url: 'https://api.dicebear.com/9.x/avataaars/png?seed=SparkJoy&size=128' },
+      { id: 'misty',  label: 'Misty',  url: 'https://api.dicebear.com/9.x/personas/png?seed=MistyDawn&size=128' },
+      { id: 'chill',  label: 'Chill',  url: 'https://api.dicebear.com/9.x/thumbs/png?seed=ChillVibes&size=128' }
+    ];
+
+    // Seed dummy users for homepage demo (so always see online even before profile)
+    const DUMMY_USERS = [
+      {
+        id: 'demo-superman',
+        profile: {
+          username: 'Superman',
+          gender: 'male',
+          age: 35,
+          country: 'United States',
+          city: 'New York',
+          location: 'New York, United States',
+          image: 'https://api.dicebear.com/9.x/adventurer/png?seed=HeroQuest&size=128',
+          whatsOnMind: 'Up, up and away!',
+          preference: 'anyone'
+        }
+      },
+      {
+        id: 'demo-goku',
+        profile: {
+          username: 'Goku',
+          gender: 'male',
+          age: 28,
+          country: 'Japan',
+          city: 'Tokyo',
+          location: 'Tokyo, Japan',
+          image: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=Sunny&size=128',
+          whatsOnMind: 'Power level rising!',
+          preference: 'anyone'
+        }
+      }
+    ];
+
+    allOnlineUsers = [...DUMMY_USERS];
+
+    // Multi-chat state
+    let chats = {};           // { partnerId: { partnerProfile, messages: [], typing: false } }
+    let activeChatId = null;
+
+    // Loaded from /world-locations.js — all countries + tier-1/tier-2 cities (locked dropdowns only)
+    // Always read from window so we pick up the list even if load order is odd
+    function getWorldLocations() {
+      return (typeof window !== 'undefined' && window.WORLD_LOCATIONS) ? window.WORLD_LOCATIONS : {};
+    }
+    // Back-compat alias used across the file (reassigned at boot if needed)
+    let WORLD_LOCATIONS = getWorldLocations();
+
+    // Emoji categories for picker (expanded)
+    const EMOJI_CATEGORIES = {
+      'Smileys': [
+        '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '☺️', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '😈', '👿', '👹', '👺', '🤡', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾'
+      ],
+      'Hearts': [
+        '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '♥️', '💌', '💋', '💍', '💎'
+      ],
+      'Gestures': [
+        '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✊', '👊', '🤛', '🤜', '👈', '👉', '👆', '👇', '☝️', '👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✍️', '💪', '🦾', '🦿', '🦵', '🦶', '👂', '🦻', '👃', '🧠', '🫀', '🫁', '🦷', '🦴', '👀', '👁️', '👅', '👄', '💋'
+      ],
+      'Animals': [
+        '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐽', '🐸', '🐵', '🙈', '🙉', '🙊', '🐒', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦟', '🦗', '🕷️', '🕸️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐈‍⬛', '🦔', '🐇', '🕊️', '🦅', '🦆', '🦢', '🦉', '🦩', '🦚', '🦜', '🐦‍⬛'
+      ],
+      'Food': [
+        '🍎', '🍐', '🍊', '🍋', '🍌', '🍉', '🍇', '🍓', '🫐', '🍈', '🍒', '🍑', '🥭', '🍍', '🥥', '🥝', '🍅', '🍆', '🥑', '🥦', '🥬', '🥒', '🌶️', '🫑', '🌽', '🥕', '🫒', '🧄', '🧅', '🥔', '🍠', '🥐', '🥯', '🍞', '🥖', '🥨', '🧀', '🥚', '🍳', '🧈', '🥞', '🧇', '🥓', '🍖', '🍗', '🥩', '🍔', '🍟', '🍕', '🌭', '🥪', '🌮', '🌯', '🫔', '🥙', '🧆', '🥘', '🍝', '🍜', '🍲', '🍛', '🍣', '🍱', '🥟', '🦪', '🍤', '🍥', '🥠', '🥡', '🍦', '🍧', '🍨', '🍩', '🍪', '🎂', '🍰', '🧁', '🥧', '🍫', '🍬', '🍭', '🍮', '🍯', '🍼', '🥛', '☕', '🫖', '🍵', '🍶', '🍾', '🍷', '🍸', '🍹', '🍺', '🍻', '🥂', '🥃', '🥤', '🧋', '🧃', '🧉', '🧊'
+      ]
+    };
+
+    // DOM refs
+    const startScreen = document.getElementById('start-screen');
+    const chatHub = document.getElementById('chat-hub');
+
+    const multiChatForm = document.getElementById('multi-chat-form');
+    const multiChatInput = document.getElementById('multi-chat-input');
+    const chatMessagesEl = document.getElementById('chat-messages');
+
+    const onlineCountEl = document.getElementById('online-count');
+    const chattingCountEl = document.getElementById('chatting-count');
+    const statsEl = document.getElementById('stats');
+
+    // Profile form elements
+    const profileForm = document.getElementById('profile-form');
+    const imageInput = document.getElementById('image-input');
+    const previewImg = document.getElementById('preview-img');
+    const previewIcon = document.getElementById('preview-icon');
+    const removeImageBtn = document.getElementById('remove-image-btn');
+
+    // Multi-chat hub elements
+    const sidebarListEl = document.getElementById('sidebar-online-list');
+    const sidebarCountEl = document.getElementById('sidebar-count');
+    const chatPlaceholder = document.getElementById('chat-placeholder');
+    const activeChatArea = document.getElementById('active-chat-area');
+    const activeChatHeader = document.getElementById('active-chat-header');
+    const closeChatPaneBtn = document.getElementById('close-chat-pane-btn');
+
+    function showScreen(screen) {
+      if (startScreen) {
+        startScreen.classList.add('hidden');
+        startScreen.setAttribute('inert', '');
+      }
+      if (chatHub) {
+        chatHub.classList.add('hidden');
+        chatHub.setAttribute('inert', '');
+      }
+
+      if (screen === 'start' && startScreen) {
+        startScreen.classList.remove('hidden');
+        startScreen.removeAttribute('inert');
+        if (typeof renderStartOnlineList === 'function') renderStartOnlineList();
+        // Ensure profile location dropdowns are ready
+        if (typeof initLocationDropdowns === 'function') initLocationDropdowns();
+      }
+      if (screen === 'hub' && chatHub) {
+        chatHub.classList.remove('hidden');
+        chatHub.removeAttribute('inert');
+        if (typeof initLocationDropdowns === 'function') initLocationDropdowns();
+        renderSidebarUsers();
+      }
+
+      currentState = screen;
+    }
+
+    // Escape user-controlled strings before inserting into HTML
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // Country flag helpers (online user lists only — pure display, no logic changes)
+    function getCountryIso(countryName) {
+      if (!countryName) return '';
+      const map = (typeof window !== 'undefined' && window.COUNTRY_ISO) ? window.COUNTRY_ISO : {};
+      if (map[countryName]) return map[countryName];
+      // Case-insensitive fallback
+      const key = Object.keys(map).find(k => k.toLowerCase() === String(countryName).toLowerCase());
+      return key ? map[key] : '';
+    }
+
+    function profileCountryName(profile) {
+      if (!profile) return '';
+      if (profile.country) return profile.country;
+      // location is "City, Country"
+      if (profile.location && profile.location.includes(', ')) {
+        return profile.location.split(', ').slice(-1)[0];
+      }
+      return profile.location || '';
+    }
+
+    /** Small flag <img> after country name; empty string if unknown */
+    function countryFlagHtml(countryName) {
+      const iso = getCountryIso(countryName);
+      if (!iso) return '';
+      const code = escapeHtml(iso.toLowerCase());
+      const title = escapeHtml(countryName);
+      // flagcdn 16px-wide — tiny, cached, no JS dependency
+      return `<img src="https://flagcdn.com/16x12/${code}.png" srcset="https://flagcdn.com/32x24/${code}.png 2x" width="16" height="12" alt="" title="${title}" class="inline-block align-middle ml-0.5 rounded-[1px] flex-shrink-0" loading="lazy" decoding="async" onerror="this.style.display='none'">`;
+    }
+
+    /** Safe HTML: "City, Country 🏳️" for online-list location lines */
+    function formatLocationWithFlagHtml(profile) {
+      const city = profile && profile.city ? String(profile.city) : '';
+      const country = profileCountryName(profile);
+      const flag = countryFlagHtml(country);
+      if (city && country) {
+        return `${escapeHtml(city)}, ${escapeHtml(country)}${flag}`;
+      }
+      if (country) return `${escapeHtml(country)}${flag}`;
+      if (profile && profile.location) return escapeHtml(profile.location);
+      return '';
+    }
+
+    // Age helpers — 18+ (digits only; avoids type=number min clamp bug)
+    const MIN_AGE = (window.PineappleChatSafety && window.PineappleChatSafety.MIN_AGE) || 18;
+    const MAX_AGE = (window.PineappleChatSafety && window.PineappleChatSafety.MAX_AGE) || 99;
+
+    function sanitizeAgeDigits(raw) {
+      return String(raw ?? '').replace(/\D/g, '').slice(0, 2);
+    }
+
+    function parseAgeValue(raw) {
+      if (window.PineappleChatSafety && typeof window.PineappleChatSafety.parseAge === 'function') {
+        return window.PineappleChatSafety.parseAge(raw);
+      }
+      const n = parseInt(sanitizeAgeDigits(raw), 10);
+      return Number.isFinite(n) ? n : NaN;
+    }
+
+    function isValidAge(raw) {
+      if (window.PineappleChatSafety && typeof window.PineappleChatSafety.isValidAge === 'function') {
+        return window.PineappleChatSafety.isValidAge(raw);
+      }
+      const n = parseAgeValue(raw);
+      return Number.isFinite(n) && n >= MIN_AGE && n <= MAX_AGE;
+    }
+
+    // Fill age <select> with 18…99 once (login form only)
+    function populateAgeDropdown() {
+      const sel = document.getElementById('age');
+      if (!sel || sel.tagName !== 'SELECT') return;
+      if (sel.dataset.populated === '1') return;
+      const prev = sel.value;
+      // Keep first placeholder option if present
+      const placeholder = sel.querySelector('option[value=""]');
+      sel.innerHTML = '';
+      if (placeholder) {
+        sel.appendChild(placeholder);
+      } else {
+        const opt0 = document.createElement('option');
+        opt0.value = '';
+        opt0.disabled = true;
+        opt0.selected = true;
+        opt0.textContent = 'Select age…';
+        sel.appendChild(opt0);
+      }
+      for (let a = MIN_AGE; a <= MAX_AGE; a++) {
+        const opt = document.createElement('option');
+        opt.value = String(a);
+        opt.textContent = String(a);
+        sel.appendChild(opt);
+      }
+      if (prev && isValidAge(prev)) sel.value = prev;
+      else sel.selectedIndex = 0;
+      sel.dataset.populated = '1';
+    }
+
+    function validateChatMessage(text) {
+      if (window.PineappleChatSafety && typeof window.PineappleChatSafety.validateChatText === 'function') {
+        return window.PineappleChatSafety.validateChatText(text);
+      }
+      // Fallback if safety script failed to load
+      if (/https?:\/\/|www\./i.test(text || '')) {
+        return { ok: false, message: 'Links are not allowed in chat for safety.' };
+      }
+      const clean = String(text || '').trim().slice(0, 800);
+      if (!clean) return { ok: false, message: 'Message cannot be empty.' };
+      return { ok: true, text: clean };
+    }
+
+    function connectSocket() {
+      if (socket) return socket;
+
+      socket = io({
+        transports: ['websocket'],
+        reconnection: true
+      });
+
+      socket.on('connect', () => {
+        console.log('%c[client] Connected to server', 'color:#64748b');
+      });
+
+      socket.on('stats', ({ online, chatting }) => {
+        onlineCountEl.textContent = online;
+        chattingCountEl.textContent = chatting;
+        statsEl.classList.remove('hidden');
+      });
+
+      socket.on('online-users', (users) => {
+        const real = users || [];
+        const demoIds = DUMMY_USERS.map(u => u.id);
+        const myId = socket ? socket.id : null;
+        allOnlineUsers = [
+          ...DUMMY_USERS,
+          ...real.filter(u => !demoIds.includes(u.id) && (!myId || u.id !== myId))
+        ];
+        if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
+          renderSidebarUsers();
+        } else if (currentState === 'start') {
+          renderStartOnlineList();
+        } else {
+          renderStartOnlineList();
+        }
+      });
+
+      socket.on('chat-started', (data) => {
+        if (!data || !data.partnerId) return;
+        
+        const pid = data.partnerId;
+        const prof = data.partnerProfile || {};
+
+        ensureChat(pid, prof);
+
+        // Only add notification if not the one we are currently viewing.
+        // Initiator switches locally on click. Receiver gets only notification.
+        if (pid !== activeChatId) {
+          chats[pid].consecutiveSent = 0;
+          chats[pid].unread = (chats[pid].unread || 0) + 1;
+        }
+        chats[pid].lastMessageTs = Date.now();
+        renderSidebarUsers();
+
+        // Do NOT auto switch or set activeChatId here.
+        // User must click in the list to open the chat.
+      });
+
+      // Legacy support - do not auto open
+      socket.on('matched', (data) => {
+        if (data && data.partnerId) {
+          const pid = data.partnerId;
+          const prof = data.partnerProfile || {};
+          ensureChat(pid, prof);
+          if (pid !== activeChatId) {
+            chats[pid].consecutiveSent = 0;
+            chats[pid].unread = (chats[pid].unread || 0) + 1;
+          }
+          chats[pid].lastMessageTs = Date.now();
+          renderSidebarUsers();
+          // Do not auto switch
+        }
+      });
+
+      socket.on('back-to-browse', () => {
+        // In multi-chat we just close the current chat pane
+        closeCurrentChat();
+      });
+
+      socket.on('chat-error', (data) => {
+        alert(data.message || 'Could not start chat.');
+      });
+
+      socket.on('receive-message', (data) => {
+        // For sender (fromSelf true): the message belongs to the active chat
+        // For receiver (fromSelf false): belongs to the senderId
+        const targetChatId = data.fromSelf ? activeChatId : data.senderId;
+        if (!targetChatId || (socket && targetChatId === socket.id)) return;
+
+        // Ensure the chat entry exists
+        ensureChat(targetChatId);
+
+        // Enrich with full profile from online list if available (for header etc.)
+        const fullUserMsg = allOnlineUsers.find(u => u.id === targetChatId);
+        if (fullUserMsg && fullUserMsg.profile) {
+          chats[targetChatId].partnerProfile = fullUserMsg.profile;
+        }
+
+        const isIncoming = !data.fromSelf;
+
+        // Store only incoming messages (sender already stored manually for instant)
+        if (isIncoming) {
+          chats[targetChatId].messages.push({
+            text: data.text,
+            fromSelf: !!data.fromSelf,
+            time: data.time,
+            system: false
+          });
+
+          // Reset spam counter when other responds
+          chats[targetChatId].consecutiveSent = 0;
+
+          // If not currently viewing this chat, increment unread and show badge
+          if (targetChatId !== activeChatId) {
+            chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
+          }
+        }
+
+        // Bump recency (latest message first in sidebar)
+        chats[targetChatId].lastMessageTs = Date.now();
+        renderSidebarUsers();
+
+        // Render live only for the active chat
+        if (targetChatId === activeChatId) {
+          // For sender's echo: we already appended manually above, so skip append here
+          if (isIncoming) {
+            addMessageToChatEl(data.text, !!data.fromSelf, data.time);
+          }
+          const ind = document.getElementById('typing-indicator');
+          if (ind) ind.classList.add('hidden');
+        }
+        if (targetChatId === activeChatId) {
+          updateChatLimitStatus();
+        }
+      });
+
+      socket.on('receive-attachment', (data) => {
+        // Same routing as text messages: own echo uses active chat; incoming uses senderId
+        const targetChatId = data.fromSelf ? activeChatId : data.senderId;
+        if (!targetChatId || (socket && targetChatId === socket.id)) return;
+
+        ensureChat(targetChatId);
+
+        // Enrich with full profile from online list if available
+        const fullUserAttach = allOnlineUsers.find(u => u.id === targetChatId);
+        if (fullUserAttach && fullUserAttach.profile) {
+          chats[targetChatId].partnerProfile = fullUserAttach.profile;
+        }
+
+        const isIncoming = !data.fromSelf;
+
+        if (isIncoming && targetChatId !== activeChatId) {
+          chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
+        }
+
+        if (isIncoming) {
+          // Reset spam counter when other responds
+          chats[targetChatId].consecutiveSent = 0;
+        }
+
+        // Bump recency
+        chats[targetChatId].lastMessageTs = Date.now();
+
+        const attachMsg = {
+          attachment: data.attachment,
+          fromSelf: !!data.fromSelf,
+          time: data.time,
+          system: false
+        };
+
+        // Sender already stored attachment client-side for instant UI
+        if (isIncoming) {
+          chats[targetChatId].messages.push(attachMsg);
+        }
+
+        renderSidebarUsers();
+
+        if (targetChatId === activeChatId) {
+          if (isIncoming) {
+            renderAttachmentInChat(data.attachment, false, data.time);
+          }
+          const ind = document.getElementById('typing-indicator');
+          if (ind) ind.classList.add('hidden');
+          updateChatLimitStatus();
+        }
+      });
+
+      socket.on('chat-left', (data) => {
+        const pid = data && (data.partnerId || data.by);
+        if (!pid) return;
+
+        if (chats[pid]) {
+          if (data.blocked) chats[pid].blocked = true;
+          delete chats[pid];
+        }
+
+        if (activeChatId === pid) {
+          activeChatId = null;
+          if (chatPlaceholder) chatPlaceholder.classList.remove('hidden');
+          if (activeChatArea) activeChatArea.classList.add('hidden');
+        }
+
+        renderSidebarUsers();
+      });
+
+      socket.on('typing', () => {
+        const ind = document.getElementById('typing-indicator');
+        if (ind) ind.classList.remove('hidden');
+      });
+
+      socket.on('stop-typing', () => {
+        const ind = document.getElementById('typing-indicator');
+        if (ind) ind.classList.add('hidden');
+      });
+
+      socket.on('partner-left', ({ reason }) => {
+        if (activeChatId && chats[activeChatId]) {
+          chats[activeChatId].unread = 0;
+        }
+        const ti = document.getElementById('typing-indicator');
+        if (ti) ti.classList.add('hidden');
+        
+        let msg = 'The other user has left the chat.';
+        if (reason === 'next') msg = 'The other user went to find someone else.';
+        if (reason === 'disconnected') msg = 'The other user disconnected.';
+        
+        if (activeChatId && chatMessagesEl) {
+          appendMessageToActiveChat({ text: msg, system: true });
+        } else if (typeof addSystemMessage === 'function') {
+          addSystemMessage(msg);
+        }
+        
+        renderSidebarUsers();
+      });
+
+      socket.on('chat-ended', () => {
+        isMatched = false;
+        if (activeChatId) {
+          delete chats[activeChatId];
+        }
+        partnerProfile = null;
+        activeChatId = null;
+        showScreen('hub');
+        if (chatMessagesEl) chatMessagesEl.innerHTML = '';
+      });
+
+      socket.on('disconnect', () => {
+        addSystemMessage('Connection lost. Reconnecting...');
+      });
+
+      socket.on('connect_error', () => {
+        addSystemMessage('Unable to connect. Please refresh the page.');
+      });
+
+      return socket;
+    }
+
+    function addMessageToChatEl(text, isSelf, time = null) {
+      if (!chatMessagesEl) return;
+      const wrapper = document.createElement('div');
+      wrapper.className = `flex ${isSelf ? 'justify-end' : 'justify-start'} message-enter`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `message-bubble ${isSelf ? 'message-self' : 'message-stranger'}`;
+
+      const messageText = document.createElement('div');
+      messageText.textContent = text;
+      bubble.appendChild(messageText);
+
+      if (time) {
+        const timeEl = document.createElement('div');
+        timeEl.className = `text-[10px] mt-1 ${isSelf ? 'text-right opacity-80' : 'theme-muted opacity-70'}`;
+        if (isSelf) timeEl.style.color = 'rgba(42,35,28,0.75)';
+        timeEl.textContent = time;
+        bubble.appendChild(timeEl);
+      }
+
+      wrapper.appendChild(bubble);
+      chatMessagesEl.appendChild(wrapper);
+      scrollChatToBottom();
+    }
+
+    function addSystemMessage(text) {
+      if (chatMessagesEl) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex justify-center';
+        const pill = document.createElement('div');
+        pill.className = 'bg-gray-50 text-gray-500 text-xs px-3 py-0.5 rounded-full border border-gray-200';
+        pill.textContent = text;
+        wrapper.appendChild(pill);
+        chatMessagesEl.appendChild(wrapper);
+        scrollChatToBottom();
+      }
+    }
+
+    function appendMessageToActiveChat({ text, fromSelf = false, time = null, system = false }) {
+      if (!chatMessagesEl || !activeChatId) return;
+
+      if (system) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex justify-center';
+        const pill = document.createElement('div');
+        pill.className = 'bg-gray-50 text-gray-500 text-xs px-3 py-0.5 rounded-full border border-gray-200';
+        pill.textContent = text;
+        wrapper.appendChild(pill);
+        chatMessagesEl.appendChild(wrapper);
+      } else {
+        const wrapper = document.createElement('div');
+        wrapper.className = `flex ${fromSelf ? 'justify-end' : 'justify-start'} message-enter`;
+        const bubble = document.createElement('div');
+        bubble.className = `message-bubble ${fromSelf ? 'message-self' : 'message-stranger'}`;
+        
+        const msgText = document.createElement('div');
+        msgText.textContent = text;
+        bubble.appendChild(msgText);
+
+        if (time) {
+          const t = document.createElement('div');
+          t.className = `text-[10px] mt-1 ${fromSelf ? 'text-right opacity-80' : 'theme-muted opacity-70'}`;
+          if (fromSelf) t.style.color = 'rgba(42,35,28,0.75)';
+          t.textContent = time;
+          bubble.appendChild(t);
+        }
+        wrapper.appendChild(bubble);
+        chatMessagesEl.appendChild(wrapper);
+      }
+      scrollChatToBottom();
+    }
+
+    function scrollChatToBottom() {
+      if (!chatMessagesEl) return;
+      // Double rAF so layout settles after image dimensions apply
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+        });
+      });
+    }
+
+    function renderAttachmentInChat(attachment, fromSelf, time) {
+      if (!chatMessagesEl || !activeChatId || !attachment) return;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = `flex ${fromSelf ? 'justify-end' : 'justify-start'} message-enter min-w-0`;
+
+      const container = document.createElement('div');
+      // Constrained width so large images never expand the pane and hide the composer
+      container.className = `chat-attach-wrap p-1 rounded-xl overflow-hidden ${fromSelf ? 'attach-self' : 'attach-other'}`;
+
+      const onMediaReady = () => scrollChatToBottom();
+
+      if (attachment.type.startsWith('image/')) {
+        const img = document.createElement('img');
+        img.src = attachment.data;
+        img.alt = attachment.name || 'Image attachment';
+        img.className = 'chat-attach-media';
+        img.loading = 'lazy';
+        img.addEventListener('load', onMediaReady);
+        img.addEventListener('error', onMediaReady);
+        container.appendChild(img);
+      } else if (attachment.type.startsWith('video/')) {
+        const video = document.createElement('video');
+        video.src = attachment.data;
+        video.controls = true;
+        video.preload = 'metadata';
+        video.className = 'chat-attach-media';
+        video.addEventListener('loadedmetadata', onMediaReady);
+        video.addEventListener('error', onMediaReady);
+        container.appendChild(video);
+      }
+
+      if (attachment.name) {
+        const nameEl = document.createElement('div');
+        nameEl.className = `text-[10px] px-1 pt-1 opacity-80 truncate ${fromSelf ? '' : 'theme-muted'}`;
+        if (fromSelf) nameEl.style.color = 'rgba(42,35,28,0.8)';
+        nameEl.textContent = attachment.name;
+        container.appendChild(nameEl);
+      }
+
+      if (time) {
+        const t = document.createElement('div');
+        t.className = `text-[10px] px-1 ${fromSelf ? 'text-right' : 'theme-muted'} opacity-80`;
+        if (fromSelf) t.style.color = 'rgba(42,35,28,0.75)';
+        t.textContent = time;
+        container.appendChild(t);
+      }
+
+      wrapper.appendChild(container);
+      chatMessagesEl.appendChild(wrapper);
+      scrollChatToBottom();
+    }
+
+    function refreshOnlineList() {
+      if (socket && currentProfile) {
+        socket.emit('set-profile', currentProfile);
+      }
+    }
+
+    function updateFilters() {
+      // Read current filter values (supports both main and sidebar filters)
+      let genderBtn = document.querySelector('#sidebar-gender-filters .gender-filter-btn.is-active-all, #sidebar-gender-filters .gender-filter-btn.is-active-male, #sidebar-gender-filters .gender-filter-btn.is-active-female') ||
+                      document.querySelector('.gender-filter-btn.is-active-all, .gender-filter-btn.is-active-male, .gender-filter-btn.is-active-female') ||
+                      document.querySelector('#sidebar-gender-filters .gender-filter-btn.bg-blue-600');
+      currentFilters.gender = genderBtn ? genderBtn.dataset.gender : 'all';
+
+      const minInput = document.getElementById('sidebar-age-min') || document.getElementById('age-min');
+      const maxInput = document.getElementById('sidebar-age-max') || document.getElementById('age-max');
+      let minAge = minInput ? parseAgeValue(minInput.value) : MIN_AGE;
+      let maxAge = maxInput ? parseAgeValue(maxInput.value) : MAX_AGE;
+      if (!Number.isFinite(minAge)) minAge = MIN_AGE;
+      if (!Number.isFinite(maxAge)) maxAge = MAX_AGE;
+      // Keep filters in bounds (18+ platform)
+      currentFilters.minAge = Math.min(MAX_AGE, Math.max(MIN_AGE, minAge));
+      currentFilters.maxAge = Math.min(MAX_AGE, Math.max(MIN_AGE, maxAge));
+      if (currentFilters.minAge > currentFilters.maxAge) {
+        const t = currentFilters.minAge;
+        currentFilters.minAge = currentFilters.maxAge;
+        currentFilters.maxAge = t;
+      }
+
+      // New location filters from selects
+      const countryFilter = document.getElementById('sidebar-country-filter');
+      const cityFilter = document.getElementById('sidebar-city-filter');
+      currentFilters.country = countryFilter ? countryFilter.value : '';
+      currentFilters.city = cityFilter ? cityFilter.value : '';
+
+      if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
+        renderSidebarUsers();
+      } else if (currentState === 'start') {
+        renderStartOnlineList();
+      }
+    }
+
+    // Populate country <select> (profile or filters). withAll: false | 'All' | 'Select'
+    function populateCountrySelect(selectEl, withAll = false, selectedValue = '') {
+      WORLD_LOCATIONS = getWorldLocations();
+      if (!selectEl) return;
+      const countries = Object.keys(WORLD_LOCATIONS || {});
+      if (!countries.length) {
+        console.warn('[PineappleChat] WORLD_LOCATIONS is empty — is /world-locations.js loaded?');
+        return;
+      }
+      const prev = selectedValue || selectEl.value || '';
+      selectEl.innerHTML = '';
+      if (withAll) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = withAll === 'All' ? 'All countries' : 'Select country…';
+        selectEl.appendChild(opt);
+      }
+      countries.sort((a, b) => a.localeCompare(b)).forEach(country => {
+        const opt = document.createElement('option');
+        opt.value = country;
+        opt.textContent = country;
+        selectEl.appendChild(opt);
+      });
+      if (prev && WORLD_LOCATIONS[prev]) selectEl.value = prev;
+    }
+
+    // Populate city <select> from chosen country only (locked list)
+    function populateCitySelect(selectEl, country, withAll = false, selectedValue = '') {
+      WORLD_LOCATIONS = getWorldLocations();
+      if (!selectEl) return;
+      const prev = selectedValue || '';
+      selectEl.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = withAll === 'All' ? 'All cities' : 'Select city…';
+      if (!withAll) placeholder.disabled = true;
+      selectEl.appendChild(placeholder);
+
+      if (country && WORLD_LOCATIONS[country]) {
+        WORLD_LOCATIONS[country].forEach(city => {
+          const opt = document.createElement('option');
+          opt.value = city;
+          opt.textContent = city;
+          selectEl.appendChild(opt);
+        });
+        selectEl.disabled = false;
+        if (prev && WORLD_LOCATIONS[country].includes(prev)) selectEl.value = prev;
+        else selectEl.value = '';
+      } else {
+        selectEl.disabled = true;
+        selectEl.value = '';
+      }
+    }
+
+    // True only when both values exist in WORLD_LOCATIONS (blocks spoofed free-text)
+    function isValidLocation(country, city) {
+      WORLD_LOCATIONS = getWorldLocations();
+      return !!(
+        country &&
+        city &&
+        WORLD_LOCATIONS[country] &&
+        WORLD_LOCATIONS[country].includes(city)
+      );
+    }
+
+    function initLocationDropdowns(force = false) {
+      WORLD_LOCATIONS = getWorldLocations();
+      const profileCountry = document.getElementById('country');
+      const profileCity = document.getElementById('city');
+      const filterCountry = document.getElementById('sidebar-country-filter');
+      const filterCity = document.getElementById('sidebar-city-filter');
+
+      // Populate if empty or only placeholder (or force on boot)
+      const needsCountries = (el) => force || !el || el.options.length <= 1;
+
+      if (profileCountry && needsCountries(profileCountry)) {
+        populateCountrySelect(profileCountry, 'Select', profileCountry.value);
+      }
+      if (profileCity) {
+        populateCitySelect(profileCity, profileCountry ? profileCountry.value : '', false, profileCity.value);
+      }
+      if (filterCountry && needsCountries(filterCountry)) {
+        populateCountrySelect(filterCountry, 'All', filterCountry.value);
+      }
+      if (filterCity) {
+        populateCitySelect(filterCity, filterCountry ? filterCountry.value : '', 'All', filterCity.value);
+      }
+    }
+
+    // Reusable emoji picker with categories for profile and chat
+    let emojiTargetInput = null;
+
+    function showEmojiPickerFor(targetInput) {
+      emojiTargetInput = targetInput;
+      let picker = document.getElementById('global-emoji-picker');
+      if (!picker) {
+        picker = document.createElement('div');
+        picker.id = 'global-emoji-picker';
+        picker.className = 'fixed z-[100] theme-surface border theme-border rounded-xl p-2 shadow-xl text-2xl max-h-[240px] overflow-auto';
+        document.body.appendChild(picker);
+        // click outside to close
+        document.addEventListener('click', (e) => {
+          if (picker && !picker.contains(e.target)) {
+            picker.style.display = 'none';
+          }
+        });
+      }
+      picker.innerHTML = '';
+      picker.style.display = 'block';
+
+      // Position near the input
+      const rect = targetInput.getBoundingClientRect();
+      picker.style.left = Math.min(rect.left, window.innerWidth - 300) + 'px';
+      let top = rect.top - 250;
+      if (top < 10) top = rect.bottom + 5;
+      picker.style.top = top + 'px';
+
+      Object.keys(EMOJI_CATEGORIES).forEach(cat => {
+        const header = document.createElement('div');
+        header.className = 'col-span-8 text-xs text-gray-500 px-1 py-0.5 border-b border-gray-200 sticky top-0 bg-gray-50';
+        header.textContent = cat;
+        picker.appendChild(header);
+
+        EMOJI_CATEGORIES[cat].forEach(emoji => {
+          const btn = document.createElement('button');
+          btn.textContent = emoji;
+          btn.className = 'p-0.5 hover:bg-gray-100 rounded transition';
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            insertEmojiToInput(emojiTargetInput, emoji);
+            picker.style.display = 'none';
+          };
+          picker.appendChild(btn);
+        });
+      });
+    }
+
+    function insertEmojiToInput(input, emoji) {
+      if (!input) return;
+      const start = input.selectionStart || input.value.length;
+      const end = input.selectionEnd || input.value.length;
+      input.value = input.value.substring(0, start) + emoji + input.value.substring(end);
+      input.selectionStart = input.selectionEnd = start + emoji.length;
+      input.focus();
+    }
+
+    function ensureChat(pid, profile) {
+      if (!pid || (socket && pid === socket.id)) return; // never self
+      if (!chats[pid]) {
+        chats[pid] = {
+          partnerProfile: profile || { username: 'Stranger' },
+          messages: [],
+          typing: false,
+          unread: 0,
+          consecutiveSent: 0,
+          lastMessageTs: 0
+        };
+      } else if (profile) {
+        chats[pid].partnerProfile = profile;
+      }
+      if (typeof chats[pid].lastMessageTs === 'undefined') chats[pid].lastMessageTs = 0;
+    }
+
+    // === MULTI CHAT FUNCTIONS ===
+
+    function renderSidebarUsers() {
+      if (!sidebarListEl) return;
+      sidebarListEl.innerHTML = '';
+
+      const currentSocketId = socket ? socket.id : null;
+      const { gender, minAge, maxAge } = currentFilters;
+
+      let filtered = allOnlineUsers.filter(user => {
+        if (!user || !user.profile || user.id === currentSocketId) return false;
+        const p = user.profile;
+        const age = parseInt(p.age) || 0;
+
+        const chatData = chats[user.id];
+        const hasUnread = chatData && (chatData.unread || 0) > 0;
+
+        // Always include users with unread messages (so notification dot is visible)
+        if (hasUnread) return true;
+
+        if (gender !== 'all' && p.gender !== gender) return false;
+        if (age < minAge || age > maxAge) return false;
+
+        // New country/city filters (fallback to old location string match if needed)
+        const userCountry = p.country || (p.location ? p.location.split(', ').pop() : '');
+        const userCity = p.city || (p.location ? p.location.split(', ')[0] : '');
+        // Exact match — values come from locked dropdowns
+        if (currentFilters.country && userCountry !== currentFilters.country) return false;
+        if (currentFilters.city && userCity !== currentFilters.city) return false;
+
+        return true;
+      });
+
+      // Sort by latest message activity first (new messages bubble to top), then unread
+      filtered.sort((a, b) => {
+        const ta = (chats[a.id] && chats[a.id].lastMessageTs) || 0;
+        const tb = (chats[b.id] && chats[b.id].lastMessageTs) || 0;
+        if (ta !== tb) return tb - ta; // latest first
+        const au = (chats[a.id] && (chats[a.id].unread || 0) > 0) ? 1 : 0;
+        const bu = (chats[b.id] && (chats[b.id].unread || 0) > 0) ? 1 : 0;
+        if (au !== bu) return bu - au;
+        return 0;
+      });
+
+      // Update sidebar count
+      if (sidebarCountEl) {
+        sidebarCountEl.textContent = `${filtered.length} online`;
+      }
+
+      if (filtered.length === 0) {
+        sidebarListEl.innerHTML = `<div class="text-xs text-gray-500 px-2 py-4 text-center">No matches</div>`;
+        return;
+      }
+
+      filtered.forEach(user => {
+        const p = user.profile;
+        const isActive = user.id === activeChatId;
+        const chatData = chats[user.id] || {};
+        const hasUnread = (chatData.unread || 0) > 0;
+
+        const row = document.createElement('div');
+        const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : '');
+        row.className = `group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${genderBg} ${isActive ? 'user-row-active' : ''} ${hasUnread ? 'border-l-2 border-red-500' : ''}`;
+
+        // Gender color for name
+        const nameStyle = p.gender === 'male'
+          ? 'color:#1565C0'
+          : (p.gender === 'female' ? 'color:#C2185B' : '');
+
+        const avatar = p.image 
+          ? `<img src="${escapeHtml(p.image)}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 ring-1 ring-gray-200" alt="" />`
+          : `<div class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-user text-xs"></i></div>`;
+
+        const safeName = escapeHtml(p.username || 'Anonymous');
+        const locWithFlag = formatLocationWithFlagHtml(p);
+        const safeMind = p.whatsOnMind ? escapeHtml(p.whatsOnMind) : '';
+        const safeAge = escapeHtml(p.age != null ? String(p.age) : '?');
+        row.innerHTML = `
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="flex-shrink-0">
+              ${avatar}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1">
+                <div class="text-sm font-semibold truncate group-hover:brightness-110 transition" style="${nameStyle}">${safeName}</div>
+                ${hasUnread ? `<span class="ml-0.5 w-2 h-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse ring-1 ring-red-400"></span>` : ''}
+              </div>
+              <div class="text-[10px] theme-muted truncate">${safeAge} • ${locWithFlag}</div>
+              ${safeMind ? `<div class="text-[9px] theme-muted italic truncate">${safeMind}</div>` : ''}
+            </div>
+          </div>
+        `;
+
+        row.addEventListener('click', () => {
+          if (!socket) return;
+          const pid = user.id;
+          if (!pid || pid === socket.id) return;
+          if (pid.startsWith('demo-')) {
+            alert('Demo users are for display only. Open another browser/tab, fill the form there, and they will appear as real online users you can chat with.');
+            return;
+          }
+          const wasNew = !chats[pid];
+
+          const p = user.profile;
+          ensureChat(pid, p);
+
+          // Clear unread when I explicitly open it by clicking
+          if (chats[pid]) chats[pid].unread = 0;
+
+          switchToChat(pid);
+
+          if (wasNew) {
+            socket.emit('start-chat-with', { targetId: pid });
+          }
+
+          renderSidebarUsers(); // refresh badges
+        });
+
+        sidebarListEl.appendChild(row);
+      });
+    }
+
+    function renderStartOnlineList() {
+      const container = document.getElementById('start-online-list');
+      if (!container) return;
+      container.innerHTML = '';
+      const myId = socket ? socket.id : null;
+      allOnlineUsers.forEach(user => {
+        if (myId && user.id === myId) return;
+        const p = user.profile;
+        const div = document.createElement('div');
+        const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : 'border border-gray-200');
+        div.className = `rounded p-1.5 flex items-center gap-1.5 text-xs cursor-pointer transition ${genderBg}`;
+        const nameStyle = p.gender === 'male'
+          ? 'color:#1565C0'
+          : (p.gender === 'female' ? 'color:#C2185B' : '');
+        const avatar = p.image
+          ? `<img src="${escapeHtml(p.image)}" class="w-5 h-5 rounded-full flex-shrink-0 object-cover" alt="">`
+          : '<div class="w-5 h-5 bg-gray-200 rounded-full flex-shrink-0"></div>';
+        const locWithFlag = formatLocationWithFlagHtml(p);
+        div.innerHTML = `
+          ${avatar}
+          <div class="min-w-0 flex-1">
+            <div class="font-medium truncate" style="${nameStyle}">${escapeHtml(p.username || 'Anonymous')}</div>
+            <div class="text-[9px] theme-muted truncate">${escapeHtml(p.age != null ? String(p.age) : '?')} • ${locWithFlag}</div>
+            ${p.whatsOnMind ? `<div class="text-[8px] theme-muted italic truncate">${escapeHtml(p.whatsOnMind)}</div>` : ''}
+          </div>
+        `;
+        div.onclick = () => {
+          if (currentProfile) {
+            const pid = user.id;
+            if (!pid || (socket && pid === socket.id)) return;
+            if (pid.startsWith('demo-')) {
+              alert('Demo users are for display only. Open another browser/tab, fill the form there, and they will appear as real online users you can chat with.');
+              return;
+            }
+            ensureChat(pid, p);
+            chats[pid].unread = 0;
+            showScreen('hub');
+            switchToChat(pid);
+            socket.emit('start-chat-with', { targetId: pid });
+          } else {
+            // Prompt user to fill details (no alert spam - highlight + focus)
+            const formSection = document.querySelector('#start-screen .flex-1 > div');
+            if (formSection) {
+              formSection.classList.add('!border-blue-500', 'ring-2', 'ring-blue-400');
+              setTimeout(() => {
+                if (formSection) formSection.classList.remove('!border-blue-500', 'ring-2', 'ring-blue-400');
+              }, 1400);
+            }
+            const firstField = document.getElementById('username');
+            if (firstField) firstField.focus();
+            // Subtle prompt
+            const hint = document.createElement('div');
+            hint.className = 'text-[10px] text-blue-600 mt-1';
+            hint.textContent = 'Please complete your details on the right first.';
+            const u = document.getElementById('username');
+            if (u && u.parentNode) {
+              const existing = u.parentNode.querySelector('.text-blue-600');
+              if (existing) existing.remove();
+              u.parentNode.appendChild(hint);
+              setTimeout(() => hint.remove(), 2200);
+            }
+          }
+        };
+        container.appendChild(div);
+      });
+    }
+
+    function switchToChat(partnerId) {
+      if (!chats[partnerId] || !chatMessagesEl || !activeChatArea) return;
+
+      // Clear unread for this chat
+      if (chats[partnerId]) chats[partnerId].unread = 0;
+
+      activeChatId = partnerId;
+      const chatData = chats[partnerId];
+
+      // Show chat area
+      chatPlaceholder.classList.add('hidden');
+      activeChatArea.classList.remove('hidden');
+
+      // Header with gender color (leaf / peach)
+      const headerProf = chatData.partnerProfile;
+      const headerNameStyle = headerProf.gender === 'male'
+        ? 'color:var(--pine-leaf)'
+        : (headerProf.gender === 'female' ? 'color:var(--pine-peach)' : '');
+
+      activeChatHeader.innerHTML = `
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="relative flex-shrink-0">
+            ${headerProf.image 
+              ? `<img src="${escapeHtml(headerProf.image)}" class="w-9 h-9 rounded-full object-cover ring-2 ring-gray-200" alt="" />` 
+              : `<div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-user text-lg theme-muted"></i></div>`}
+          </div>
+          <div class="min-w-0">
+            <div class="font-semibold text-base truncate" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}</div>
+            <div class="text-xs theme-muted -mt-0.5 truncate">${escapeHtml(headerProf.age != null ? String(headerProf.age) : '?')} • ${escapeHtml(headerProf.location || 'Unknown')}</div>
+            ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
+          </div>
+        </div>
+      `;
+
+      // Load messages (include attachments when re-opening a chat)
+      chatMessagesEl.innerHTML = '';
+      chatData.messages.forEach(msg => {
+        if (msg.system) {
+          const w = document.createElement('div');
+          w.className = 'flex justify-center';
+          const pill = document.createElement('div');
+          pill.className = 'bg-gray-50 text-gray-500 text-xs px-3 py-0.5 rounded-full border border-gray-200';
+          pill.textContent = msg.text;
+          w.appendChild(pill);
+          chatMessagesEl.appendChild(w);
+        } else if (msg.attachment) {
+          renderAttachmentInChat(msg.attachment, !!msg.fromSelf, msg.time);
+        } else {
+          addMessageToChatEl(msg.text, msg.fromSelf, msg.time);
+        }
+      });
+      scrollChatToBottom();
+
+      // Re-render sidebar to highlight active + clear badge
+      renderSidebarUsers();
+
+      // Focus input (composer is always visible after layout fix)
+      setTimeout(() => multiChatInput && multiChatInput.focus(), 50);
+
+      updateChatLimitStatus();
+    }
+
+    function updateChatLimitStatus() {
+      const statusEl = document.getElementById('chat-limit-status');
+      const attachBtn = document.getElementById('attach-btn');
+      if (!statusEl || !activeChatId || !chats[activeChatId]) {
+        if (statusEl) statusEl.textContent = '';
+        if (multiChatInput) multiChatInput.disabled = false;
+        if (attachBtn) attachBtn.disabled = false;
+        return;
+      }
+
+      const count = chats[activeChatId].consecutiveSent || 0;
+      if (count >= 5) {
+        statusEl.textContent = `5/5 messages sent — wait for reply to send more`;
+        statusEl.style.color = '#f87171';
+        if (multiChatInput) multiChatInput.disabled = true;
+        if (attachBtn) attachBtn.disabled = true;
+      } else {
+        statusEl.textContent = `${count}/5 messages sent`;
+        statusEl.style.color = '#64748b';
+        if (multiChatInput) multiChatInput.disabled = false;
+        if (attachBtn) attachBtn.disabled = false;
+      }
+    }
+
+    function startOrSwitchChat(partnerId) {
+      if (chats[partnerId]) {
+        switchToChat(partnerId);
+      } else {
+        socket.emit('start-chat-with', { targetId: partnerId });
+      }
+    }
+
+    function closeCurrentChat() {
+      if (activeChatId && chats[activeChatId]) {
+        // We keep the chat data but just close the pane
+      }
+      activeChatId = null;
+      if (chatPlaceholder) chatPlaceholder.classList.remove('hidden');
+      if (activeChatArea) activeChatArea.classList.add('hidden');
+      renderSidebarUsers();
+      updateChatLimitStatus();
+    }
+
+    function endCurrentChat() {
+      if (!activeChatId || !socket) return;
+      socket.emit('end-chat');
+      // Clean up local
+      delete chats[activeChatId];
+      closeCurrentChat();
+    }
+
+    // Typing indicator logic
+    function handleTyping() {
+      if (!socket) return;
+      if (!activeChatId) return;
+      
+      socket.emit('typing');
+      
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        if (socket) socket.emit('stop-typing');
+      }, 1400);
+    }
+
+    // Collect profile data from form
+    function getProfileFromForm() {
+      const username = document.getElementById('username').value.trim();
+      const gender = document.querySelector('input[name="gender"]:checked')?.value || 'male';
+      const ageRaw = document.getElementById('age') ? document.getElementById('age').value : '';
+      const age = isValidAge(ageRaw) ? parseAgeValue(ageRaw) : MIN_AGE;
+      const country = document.getElementById('country') ? document.getElementById('country').value : '';
+      const city = document.getElementById('city') ? document.getElementById('city').value.trim() : '';
+      const whatsOnMind = document.getElementById('whats-on-mind') ? document.getElementById('whats-on-mind').value.trim() : '';
+      const agreedToTerms = !!(document.getElementById('agree-terms') && document.getElementById('agree-terms').checked);
+
+      // Image is stored as base64 (upload) or remote URL (preset) on the preview
+      let image = null;
+      if (previewImg && !previewImg.classList.contains('hidden') && previewImg.getAttribute('src')) {
+        image = previewImg.src;
+      }
+
+      const location = `${city}, ${country}`;
+
+      return {
+        username: username || 'Stranger',
+        gender: gender,
+        age: age,
+        country: country,
+        city: city,
+        location: location,
+        whatsOnMind: whatsOnMind,
+        image: image,
+        preference: 'anyone',  // preference filter is now handled in the chat window sidebar
+        agreedToTerms: agreedToTerms
+      };
+    }
+
+    function setProfilePreview(src) {
+      const img = document.getElementById('preview-img');
+      const icon = document.getElementById('preview-icon');
+      const removeBtn = document.getElementById('remove-image-btn');
+      if (!img) return;
+      if (src) {
+        img.src = src;
+        img.classList.remove('hidden');
+        if (icon) icon.classList.add('hidden');
+        if (removeBtn) removeBtn.classList.remove('hidden');
+      } else {
+        img.removeAttribute('src');
+        img.src = '';
+        img.classList.add('hidden');
+        if (icon) icon.classList.remove('hidden');
+        if (removeBtn) removeBtn.classList.add('hidden');
+      }
+    }
+
+    function highlightSelectedAvatar(url) {
+      document.querySelectorAll('.avatar-preset-btn').forEach(btn => {
+        const selected = url && btn.dataset.url === url;
+        btn.classList.toggle('ring-2', !!selected);
+        btn.classList.toggle('ring-blue-400', !!selected);
+        btn.classList.toggle('border-blue-500', !!selected);
+        btn.classList.toggle('border-gray-300', !selected);
+      });
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please choose an image file (JPG, PNG, WebP, or GIF).');
+        e.target.value = '';
+        return;
+      }
+
+      if (file.size > 1024 * 1024) {
+        alert('Image is too large. Please choose a file under 1MB.');
+        e.target.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        setProfilePreview(ev.target.result);
+        highlightSelectedAvatar(null); // custom upload, not a preset
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeProfileImage() {
+      setProfilePreview(null);
+      highlightSelectedAvatar(null);
+      if (imageInput) imageInput.value = '';
+    }
+
+    function selectPresetAvatar(url) {
+      if (!url) return;
+      // Clear any previous file upload so getProfileFromForm uses the preset URL
+      if (imageInput) imageInput.value = '';
+      setProfilePreview(url);
+      highlightSelectedAvatar(url);
+    }
+
+    // Keep old name as alias so any leftover onclick still works
+    function selectCartoonAvatar(url) {
+      selectPresetAvatar(url);
+    }
+
+    function renderAvatarPresets() {
+      const grid = document.getElementById('avatar-preset-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      AVATAR_PRESETS.forEach((preset, i) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'avatar-preset-btn flex flex-col items-center gap-0.5 p-1 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 hover:border-blue-400 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
+        btn.dataset.url = preset.url;
+        btn.dataset.id = preset.id;
+        btn.title = preset.label;
+        btn.setAttribute('aria-label', 'Choose avatar ' + preset.label);
+        btn.innerHTML =
+          '<img src="' + preset.url + '" alt="' + preset.label + '" ' +
+          'class="w-10 h-10 rounded-full bg-gray-100 object-cover" loading="lazy" ' +
+          'onerror="this.src=\'https://api.dicebear.com/9.x/identicon/png?seed=' + encodeURIComponent(preset.id) + '&size=128\'">' +
+          '<span class="text-[9px] text-gray-500 truncate w-full text-center">' + preset.label + '</span>';
+        btn.addEventListener('click', () => selectPresetAvatar(preset.url));
+        grid.appendChild(btn);
+      });
+    }
+
+    function initUI() {
+      initTailwind();
+
+      // Profile form submit (new flow: set profile then browse online users)
+      if (profileForm) {
+        profileForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+
+          // Clear previous highlights
+          const clearHighlights = () => {
+            ['username', 'age', 'country', 'city'].forEach(id => {
+              const el = document.getElementById(id);
+              if (el) {
+                el.classList.remove('border-red-500', 'focus:border-red-500');
+                el.classList.add('border-gray-300');
+              }
+            });
+            const genderGroup = document.querySelector('#profile-form .flex.gap-2');
+            if (genderGroup) genderGroup.classList.remove('!border-red-500', 'ring-1', 'ring-red-500');
+            const termsErr = document.getElementById('terms-error');
+            if (termsErr) termsErr.classList.add('hidden');
+            const termsBox = document.getElementById('terms-box');
+            if (termsBox) termsBox.classList.remove('ring-2', 'ring-red-400');
+          };
+          clearHighlights();
+
+          // Validate and highlight
+          let hasError = false;
+
+          const username = document.getElementById('username').value.trim();
+          const ageVal = document.getElementById('age') ? document.getElementById('age').value : '';
+          const country = document.getElementById('country') ? document.getElementById('country').value.trim() : '';
+          const city = document.getElementById('city') ? document.getElementById('city').value.trim() : '';
+          const genderChecked = document.querySelector('input[name="gender"]:checked');
+          const agreeEl = document.getElementById('agree-terms');
+          const mindVal = document.getElementById('whats-on-mind') ? document.getElementById('whats-on-mind').value : '';
+
+          const uEl = document.getElementById('username');
+          if (!username) {
+            if (uEl) {
+              uEl.classList.add('border-red-500', 'focus:border-red-500');
+              uEl.classList.remove('border-gray-300');
+            }
+            hasError = true;
+          } else if (window.PineappleChatSafety && window.PineappleChatSafety.validateUsername) {
+            const un = window.PineappleChatSafety.validateUsername(username);
+            if (!un.ok) {
+              if (uEl) {
+                uEl.classList.add('border-red-500', 'focus:border-red-500');
+                uEl.classList.remove('border-gray-300');
+              }
+              alert(un.message || 'Invalid username.');
+              hasError = true;
+            }
+          }
+
+          const genderGroup = document.querySelector('#profile-form .flex.gap-2');
+          if (!genderChecked) {
+            if (genderGroup) {
+              genderGroup.classList.add('!border-red-500', 'ring-1', 'ring-red-500', 'rounded-xl');
+            }
+            hasError = true;
+          }
+
+          const aEl = document.getElementById('age');
+          if (!isValidAge(ageVal)) {
+            if (aEl) {
+              aEl.classList.add('border-red-500', 'focus:border-red-500');
+              aEl.classList.remove('border-gray-300');
+            }
+            if (ageVal && parseAgeValue(ageVal) < MIN_AGE) {
+              alert('You must be 18 years or older to use PineappleChat.');
+            }
+            hasError = true;
+          }
+
+          const countryEl = document.getElementById('country');
+          const cityEl = document.getElementById('city');
+          if (!country || !WORLD_LOCATIONS[country]) {
+            if (countryEl) {
+              countryEl.classList.add('border-red-500', 'focus:border-red-500');
+              countryEl.classList.remove('border-gray-300');
+            }
+            hasError = true;
+          }
+          if (!isValidLocation(country, city)) {
+            if (cityEl) {
+              cityEl.classList.add('border-red-500', 'focus:border-red-500');
+              cityEl.classList.remove('border-gray-300');
+            }
+            hasError = true;
+          }
+
+          if (mindVal && mindVal.trim()) {
+            const mindCheck = validateChatMessage(mindVal);
+            if (!mindCheck.ok) {
+              alert(mindCheck.message || 'Status text is not allowed.');
+              hasError = true;
+            }
+          }
+
+          if (!agreeEl || !agreeEl.checked) {
+            const termsErr = document.getElementById('terms-error');
+            if (termsErr) termsErr.classList.remove('hidden');
+            const termsBox = document.getElementById('terms-box');
+            if (termsBox) {
+              termsBox.classList.add('ring-2', 'ring-red-400');
+              termsBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            hasError = true;
+          }
+
+          if (hasError) {
+            return;
+          }
+
+          currentProfile = getProfileFromForm();
+
+          const s = connectSocket();
+
+          // Handle validation / unique username errors from server
+          s.once('profile-error', (err) => {
+            if (err && err.field === 'username') {
+              const u = document.getElementById('username');
+              if (u) {
+                u.classList.add('border-red-500', 'focus:border-red-500');
+                u.classList.remove('border-gray-300');
+              }
+            }
+            if (err && err.field === 'age') {
+              const a = document.getElementById('age');
+              if (a) {
+                a.classList.add('border-red-500', 'focus:border-red-500');
+                a.classList.remove('border-gray-300');
+              }
+            }
+            if (err && err.field === 'terms') {
+              const termsErr = document.getElementById('terms-error');
+              if (termsErr) termsErr.classList.remove('hidden');
+              const termsBox = document.getElementById('terms-box');
+              if (termsBox) termsBox.classList.add('ring-2', 'ring-red-400');
+            }
+            if (err && err.field === 'location') {
+              ['country', 'city'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                  el.classList.add('border-red-500', 'focus:border-red-500');
+                  el.classList.remove('border-gray-300');
+                }
+              });
+            }
+            if (err && err.field === 'age') {
+              const a = document.getElementById('age');
+              if (a) {
+                a.classList.add('border-red-500', 'focus:border-red-500');
+                a.classList.remove('border-gray-300');
+              }
+            }
+            alert((err && err.message) || 'Error with your profile. Please fix and try again.');
+            showScreen('start'); // go back to form
+          });
+
+          s.once('profile-accepted', () => {
+            // Success: proceed to hub
+            currentFilters = { gender: 'all', minAge: MIN_AGE, maxAge: MAX_AGE, country: '', city: '' };
+            showScreen('hub');
+          });
+
+          s.emit('set-profile', currentProfile);
+
+          // Reset filters (will be re-set on accepted)
+          currentFilters = { gender: 'all', minAge: MIN_AGE, maxAge: MAX_AGE, country: '', city: '' };
+        });
+
+        // Clear red borders on typing / change
+        ['username', 'age', 'country', 'city'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            const clear = () => {
+              el.classList.remove('border-red-500', 'focus:border-red-500');
+              el.classList.add('border-gray-300');
+            };
+            el.addEventListener('input', clear);
+            el.addEventListener('change', clear);
+          }
+        });
+
+        // Age is a dropdown (18–99); filter fields stay free digits
+        ['sidebar-age-min', 'sidebar-age-max'].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('input', () => {
+            const cleaned = sanitizeAgeDigits(el.value);
+            if (el.value !== cleaned) el.value = cleaned;
+          });
+        });
+        const genderRadios = document.querySelectorAll('input[name="gender"]');
+        const gGroup = document.querySelector('#profile-form .flex.gap-2');
+        genderRadios.forEach(r => {
+          r.addEventListener('change', () => {
+            if (gGroup) gGroup.classList.remove('!border-red-500', 'ring-1', 'ring-red-500');
+          });
+        });
+      }
+
+      // Profile picture: upload own photo OR pick a preset avatar
+      renderAvatarPresets();
+      const uploadPhotoBtn = document.getElementById('upload-photo-btn');
+      if (uploadPhotoBtn) {
+        uploadPhotoBtn.addEventListener('click', () => {
+          if (imageInput) imageInput.click();
+        });
+      }
+      if (imageInput) {
+        imageInput.addEventListener('change', handleImageUpload);
+      }
+      if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', removeProfileImage);
+      }
+
+      // Smiley picker for "What's on your mind" in profile form
+      const smileyBtn = document.getElementById('smiley-btn');
+      if (smileyBtn) {
+        smileyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showEmojiPickerFor(document.getElementById('whats-on-mind'));
+        });
+      }
+
+      // (legacy cancel removed for optimization)
+
+      // Back to users button (new)
+      const backToUsersBtn = document.getElementById('back-to-users-btn');
+      if (backToUsersBtn) {
+        backToUsersBtn.addEventListener('click', () => {
+          if (socket) {
+            socket.emit('end-chat');
+          }
+          partnerProfile = null;
+          isMatched = false;
+          showScreen('hub');
+        });
+      }
+
+      // Sidebar refresh
+      const refreshSidebar = document.getElementById('refresh-sidebar-btn');
+      if (refreshSidebar) {
+        refreshSidebar.addEventListener('click', () => {
+          refreshOnlineList();
+        });
+      }
+
+      // Set up gender filter buttons (colorful active states)
+      const applyGenderFilterActive = (btn) => {
+        const group = btn.parentElement;
+        if (!group) return;
+        group.querySelectorAll('.gender-filter-btn').forEach(b => {
+          b.classList.remove('is-active-all', 'is-active-male', 'is-active-female', 'bg-blue-600', 'text-white');
+          b.classList.add('border', 'border-gray-300');
+        });
+        btn.classList.remove('border', 'border-gray-300');
+        const g = btn.dataset.gender;
+        if (g === 'male') btn.classList.add('is-active-male');
+        else if (g === 'female') btn.classList.add('is-active-female');
+        else btn.classList.add('is-active-all');
+      };
+      const setupGenderFilters = () => {
+        const genderBtns = document.querySelectorAll('.gender-filter-btn');
+        genderBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            applyGenderFilterActive(btn);
+            updateFilters();
+          });
+        });
+      };
+      setupGenderFilters();
+
+      // Age filters + new sidebar location selects (support)
+      ['age-min', 'age-max', 'sidebar-age-min', 'sidebar-age-max', 'sidebar-country-filter', 'sidebar-city-filter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          const eventType = (id.includes('filter') || id.includes('country') || id.includes('city')) ? 'change' : 'input';
+          el.addEventListener(eventType, () => {
+            updateFilters();
+          });
+        }
+      });
+
+      // Default "all" gender active
+      const allBtn = document.querySelector('#sidebar-gender-filters .gender-filter-btn[data-gender="all"]') ||
+                     document.querySelector('.gender-filter-btn[data-gender="all"]');
+      if (allBtn) applyGenderFilterActive(allBtn);
+
+      // Locked country/city dropdowns (profile + filters)
+      initLocationDropdowns();
+
+      const profileCountry = document.getElementById('country');
+      const profileCity = document.getElementById('city');
+      if (profileCountry && profileCity) {
+        profileCountry.addEventListener('change', () => {
+          populateCitySelect(profileCity, profileCountry.value, false);
+          profileCountry.classList.remove('border-red-500', 'focus:border-red-500');
+          profileCountry.classList.add('border-gray-300');
+        });
+        profileCity.addEventListener('change', () => {
+          profileCity.classList.remove('border-red-500', 'focus:border-red-500');
+          profileCity.classList.add('border-gray-300');
+        });
+      }
+
+      const sidebarCountry = document.getElementById('sidebar-country-filter');
+      const sidebarCity = document.getElementById('sidebar-city-filter');
+      if (sidebarCountry && sidebarCity) {
+        sidebarCountry.addEventListener('change', () => {
+          populateCitySelect(sidebarCity, sidebarCountry.value, 'All');
+          updateFilters();
+        });
+        sidebarCity.addEventListener('change', updateFilters);
+      }
+
+      // New multi-chat form
+      if (multiChatForm) {
+        multiChatForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const rawVal = multiChatInput.value.trim();
+          if (!rawVal || !activeChatId || !socket) return;
+          if (activeChatId === socket.id) return; // never chat with self
+
+          // Client-side safety (server also enforces)
+          const safetyCheck = validateChatMessage(rawVal);
+          if (!safetyCheck.ok) {
+            alert(safetyCheck.message || 'Message blocked by safety filters.');
+            return;
+          }
+          const val = safetyCheck.text;
+
+          const chatState = chats[activeChatId];
+          if (chatState && (chatState.consecutiveSent || 0) >= 5) {
+            alert('You can send up to 5 messages. Wait for the other user to respond.');
+            return;
+          }
+
+          // Client-side link block
+          if (/https?:\/\/|www\.|\.[a-z]{2,}\//i.test(val)) {
+            alert('Links are not allowed in chat.');
+            return;
+          }
+
+          const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          // Instant UI for sender
+          if (chatState) {
+            chatState.messages.push({ text: val, fromSelf: true, time });
+            chatState.consecutiveSent = (chatState.consecutiveSent || 0) + 1;
+            chatState.lastMessageTs = Date.now();
+          }
+          addMessageToChatEl(val, true, time);
+
+          updateChatLimitStatus();
+
+          socket.emit('send-message-to', { targetId: activeChatId, text: val });
+          multiChatInput.value = '';
+          renderSidebarUsers(); // bump recency in list
+        });
+      }
+
+      if (closeChatPaneBtn) {
+        closeChatPaneBtn.addEventListener('click', () => closeCurrentChat());
+      }
+
+      // New chat options: Leave and Block
+      const leaveBtn = document.getElementById('leave-chat-btn');
+      if (leaveBtn) {
+        leaveBtn.addEventListener('click', () => {
+          if (!activeChatId || !socket) return;
+          socket.emit('leave-chat', { targetId: activeChatId });
+          if (chats[activeChatId]) delete chats[activeChatId];
+          closeCurrentChat();
+        });
+      }
+
+      const blockBtn = document.getElementById('block-user-btn');
+      if (blockBtn) {
+        blockBtn.addEventListener('click', () => {
+          if (!activeChatId || !socket) return;
+          if (!confirm('Block this user? You will not be able to chat with them again in this session.')) return;
+          socket.emit('block-user', { targetId: activeChatId });
+          if (chats[activeChatId]) delete chats[activeChatId];
+          closeCurrentChat();
+          renderSidebarUsers();
+        });
+      }
+
+      // Attachment support
+      const attachBtn = document.getElementById('attach-btn');
+      const attachInput = document.getElementById('attachment-input');
+      if (attachBtn && attachInput) {
+        attachBtn.addEventListener('click', () => attachInput.click());
+
+        attachInput.addEventListener('change', () => {
+          const file = attachInput.files[0];
+          if (!file || !activeChatId || !socket) {
+            attachInput.value = '';
+            return;
+          }
+
+          if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
+            alert('Only image and video files are allowed.');
+            attachInput.value = '';
+            return;
+          }
+
+          if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            alert('File too large (max 5MB).');
+            attachInput.value = '';
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const chatState = chats[activeChatId];
+            if (chatState && (chatState.consecutiveSent || 0) >= 5) {
+              alert('You can send up to 5 messages. Wait for the other user to respond.');
+              attachInput.value = '';
+              return;
+            }
+
+            const attachment = {
+              data: ev.target.result,
+              type: file.type,
+              name: file.name
+            };
+            // Instant preview for sender
+            if (chatState) {
+              chatState.messages.push({ attachment, fromSelf: true, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+              chatState.consecutiveSent = (chatState.consecutiveSent || 0) + 1;
+              chatState.lastMessageTs = Date.now();
+            }
+            renderAttachmentInChat(attachment, true, new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+
+            updateChatLimitStatus();
+
+            socket.emit('send-attachment-to', { targetId: activeChatId, attachment });
+            attachInput.value = '';
+            renderSidebarUsers(); // update recency order
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // Chat emoji picker with categories
+      const chatEmojiBtn = document.getElementById('chat-emoji-btn');
+      if (chatEmojiBtn) {
+        chatEmojiBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showEmojiPickerFor(multiChatInput);
+        });
+      }
+
+      // Typing detection (hub only)
+      if (multiChatInput) {
+        multiChatInput.addEventListener('input', () => {
+          handleTyping();
+        });
+      }
+
+      // Show placeholder stats on first load
+      setTimeout(() => {
+        if (!statsEl.classList.contains('hidden')) return;
+        if (onlineCountEl.textContent === '0') {
+          onlineCountEl.textContent = Math.floor(Math.random() * 28) + 14;
+          chattingCountEl.textContent = Math.floor(Math.random() * 9) + 3;
+          statsEl.classList.remove('hidden');
+        }
+      }, 1800);
+
+      // Initial render of online list on homepage
+      renderStartOnlineList();
+    }
+
+    // Boot
+    function boot() {
+      initThemeToggle();
+      WORLD_LOCATIONS = getWorldLocations();
+      const n = Object.keys(WORLD_LOCATIONS).length;
+      console.log('[PineappleChat] Loaded', n, 'countries for location dropdowns');
+      populateAgeDropdown();
+      initUI();
+      // Force-fill country lists after UI hooks are ready
+      initLocationDropdowns(true);
+      showScreen('start');
+
+      // Optional: connect socket eagerly but don't start searching
+      // This allows receiving live stats even on landing
+      setTimeout(() => {
+        const s = connectSocket();
+      }, 120);
+    }
+
+    if (document.readyState === 'complete') boot();
+    else window.addEventListener('load', boot);
+
+    // Helpful console note for devs
+    console.log('%c[PineappleChat] Ready. Open multiple tabs to test matching.', 'color:#64748b');
+  </script>
+</body>
+</html>
