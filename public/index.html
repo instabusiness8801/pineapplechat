@@ -1364,9 +1364,11 @@
     const SESSION_KEY = 'pineapplechat-session';
     const SESSION_GRACE_MS = 2 * 60 * 1000;
     let sessionToken = null;
+    /** Set true after intentional Log off so reconnect never re-registers the old profile. */
+    let intentionalLogout = false;
 
     function saveSession() {
-      if (!currentProfile) return;
+      if (!currentProfile || intentionalLogout) return;
       try {
         const payload = {
           savedAt: Date.now(),
@@ -1413,14 +1415,8 @@
       }
     }
 
-    function logOff() {
-      if (!confirm('Log off? You will leave the online list and clear this device session.')) return;
-
-      // Tell server to remove immediately (no 2‑min grace)
-      if (socket && socket.connected) {
-        socket.emit('logout');
-      }
-
+    function applyLoggedOutLocalState() {
+      intentionalLogout = true;
       clearSession();
       currentProfile = null;
       partnerProfile = null;
@@ -1445,8 +1441,58 @@
 
       showScreen('start');
       updateLogoutButtonVisibility();
+      // Refresh local online list (we should no longer appear; others already got broadcast)
       if (socket && socket.connected) {
         socket.emit('request-online-users');
+      } else {
+        renderStartOnlineList();
+      }
+    }
+
+    function logOff() {
+      if (!confirm('Log off? You will leave the online list and clear this device session.')) return;
+
+      intentionalLogout = true;
+      // Drop local session first so reconnect / online-users cannot re-save us
+      const myId = socket ? socket.id : null;
+      const myToken = sessionToken;
+      clearSession();
+      currentProfile = null;
+
+      // Tell server to remove immediately (no 2‑min grace). Prefer ack when available.
+      if (socket && socket.connected) {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          applyLoggedOutLocalState();
+        };
+        try {
+          // socket.io timeout ack: (err, response)
+          socket.timeout(4000).emit('logout', (err) => {
+            if (err) console.warn('[PineappleChat] logout ack timeout/error', err);
+            finish();
+          });
+        } catch (e) {
+          socket.emit('logout');
+          setTimeout(finish, 150);
+        }
+        // Always finish UI even if ack is lost
+        setTimeout(finish, 600);
+      } else {
+        applyLoggedOutLocalState();
+      }
+
+      // Optimistically remove self from lists while waiting for server broadcast
+      if (myId || myToken) {
+        allOnlineUsers = allOnlineUsers.filter(u => {
+          if (!u) return false;
+          if (myId && u.id === myId) return false;
+          if (myToken && u.sessionToken === myToken) return false;
+          return true;
+        });
+        renderStartOnlineList();
+        renderSidebarUsers();
       }
     }
 
@@ -1607,7 +1653,8 @@
       socket.on('connect', () => {
         console.log('%c[client] Connected', 'color:#64748b', socket.id);
         // Re-register within 2 min grace — new socket id, same sessionToken
-        if (currentProfile) {
+        // Never re-register after intentional Log off
+        if (currentProfile && !intentionalLogout) {
           if (sessionToken) currentProfile.sessionToken = sessionToken;
           socket.emit('set-profile', currentProfile);
         }
@@ -1616,16 +1663,26 @@
 
       socket.on('disconnect', (reason) => {
         console.log('%c[client] Disconnected', 'color:#b45309', reason);
-        saveSession(); // keep chat history for up to 2 minutes
+        if (!intentionalLogout) {
+          saveSession(); // keep chat history for up to 2 minutes
+        }
       });
 
       socket.on('reconnect', () => {
         console.log('%c[client] Reconnected', 'color:#64748b', socket.id);
-        if (currentProfile) {
+        if (currentProfile && !intentionalLogout) {
           if (sessionToken) currentProfile.sessionToken = sessionToken;
           socket.emit('set-profile', currentProfile);
         }
         socket.emit('request-online-users');
+      });
+
+      socket.on('logged-out', () => {
+        // Server confirmed permanent removal from online list
+        intentionalLogout = true;
+        if (currentProfile || sessionToken) {
+          applyLoggedOutLocalState();
+        }
       });
 
       socket.on('stats', ({ online, chatting }) => {
@@ -1645,13 +1702,23 @@
         const demos = getDemoUsers();
         const demoIds = new Set(demos.map(u => u.id));
         const myId = socket ? socket.id : null;
+        const myToken = sessionToken || (currentProfile && currentProfile.sessionToken) || null;
         allOnlineUsers = [
           ...demos,
-          ...real.filter(u => u && u.id && !demoIds.has(u.id) && u.id !== myId && u.profile)
+          ...real.filter(u => {
+            if (!u || !u.id || !u.profile) return false;
+            if (demoIds.has(u.id)) return false;
+            // Never show ourselves (by live socket id or session token)
+            if (myId && u.id === myId) return false;
+            if (myToken && u.sessionToken && u.sessionToken === myToken) return false;
+            return true;
+          })
         ];
         // Partners may have new socket ids after refresh — rematch chats
-        remapChatsFromOnlineList(real);
-        saveSession();
+        if (!intentionalLogout) {
+          remapChatsFromOnlineList(real);
+          saveSession();
+        }
         if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
           renderSidebarUsers();
         }
@@ -2021,7 +2088,7 @@
 
     function refreshOnlineList() {
       if (!socket) return;
-      if (currentProfile && socket.connected) {
+      if (currentProfile && socket.connected && !intentionalLogout) {
         // Re-assert presence (also refreshes server-side socket registration)
         socket.emit('set-profile', currentProfile);
       }
@@ -2857,6 +2924,7 @@
             return;
           }
 
+          intentionalLogout = false; // user is joining again after a log off
           currentProfile = getProfileFromForm();
 
           const s = connectSocket();
@@ -2904,6 +2972,7 @@
           });
 
           s.once('profile-accepted', (info) => {
+            intentionalLogout = false;
             if (info && info.sessionToken) {
               sessionToken = info.sessionToken;
               currentProfile.sessionToken = info.sessionToken;

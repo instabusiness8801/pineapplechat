@@ -127,7 +127,7 @@ function clearGraceTimer(sess) {
 
 function removeSession(token, reason) {
   const sess = sessions.get(token);
-  if (!sess) return;
+  if (!sess) return null;
   clearGraceTimer(sess);
   if (sess.socketId) {
     socketToSession.delete(sess.socketId);
@@ -136,6 +136,36 @@ function removeSession(token, reason) {
   }
   sessions.delete(token);
   console.log(`[session] removed ${sess.profile && sess.profile.username} (${reason})`);
+  return sess;
+}
+
+/** Resolve session token for a socket (mapping, property, or scan). */
+function resolveSessionTokenForSocket(socket) {
+  if (!socket) return null;
+  let token = socketToSession.get(socket.id) || socket.sessionToken || null;
+  if (token && sessions.has(token)) return token;
+  // Fallback: find session bound to this socket id
+  for (const [t, sess] of sessions.entries()) {
+    if (sess.socketId === socket.id) return t;
+  }
+  return token && sessions.has(token) ? token : null;
+}
+
+/** Permanently remove presence for a socket (log off). No 2‑min grace. */
+function forceLogoutSocket(socket, reason) {
+  const token = resolveSessionTokenForSocket(socket);
+  let removed = null;
+  if (token) {
+    removed = removeSession(token, reason || 'logout');
+  }
+  // Always clear socket-local state so reconnect without set-profile stays anonymous
+  if (socket) {
+    socket.profile = null;
+    socket.sessionToken = null;
+    socket.intentionalLogout = true;
+    socketToSession.delete(socket.id);
+  }
+  return removed;
 }
 
 function buildOnlineList() {
@@ -339,6 +369,7 @@ io.on('connection', (socket) => {
     socketToSession.set(socket.id, token);
     socket.profile = cleanedProfile;
     socket.sessionToken = token;
+    socket.intentionalLogout = false; // joined / re-joined after log off
 
     socket.emit('profile-accepted', {
       id: socket.id,
@@ -541,25 +572,45 @@ io.on('connection', (socket) => {
   });
 
   // Explicit log off — remove immediately (no 2‑minute grace)
-  socket.on('logout', () => {
-    const token = socketToSession.get(socket.id) || socket.sessionToken;
-    if (token) {
-      const sess = sessions.get(token);
-      const name = sess && sess.profile && sess.profile.username;
-      removeSession(token, 'logout');
-      console.log(`[logout] ${name || socket.id}`);
+  socket.on('logout', (ack) => {
+    const partnerId = getPartnerId(socket.id);
+    const removed = forceLogoutSocket(socket, 'logout');
+    const name = removed && removed.profile && removed.profile.username;
+    console.log(`[logout] ${name || socket.id} (removed=${!!removed})`);
+
+    // Tell active chat partner this leave is permanent (not the 2‑min grace)
+    if (partnerId) {
+      const partner = getLiveSocket(partnerId);
+      if (partner) {
+        partner.emit('partner-left', {
+          reason: 'logout',
+          partnerId: socket.id,
+          temporary: false
+        });
+        partner.emit('chat-left', { by: socket.id, partnerId: socket.id, logout: true });
+      }
+      unpair(partnerId);
     }
-    socket.profile = null;
-    socket.sessionToken = null;
-    socket.emit('logged-out');
+
+    // Broadcast first so other clients drop this user from online lists
     broadcastOnlineUsers();
     broadcastStats();
+    socket.emit('logged-out', { ok: true });
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} (${reason})`);
 
-    const token = socketToSession.get(socket.id);
+    // Intentional log off already removed the session — do not start grace
+    if (socket.intentionalLogout) {
+      socketToSession.delete(socket.id);
+      broadcastOnlineUsers();
+      broadcastStats();
+      return;
+    }
+
+    const token = socketToSession.get(socket.id) || socket.sessionToken;
     const sess = token ? sessions.get(token) : null;
 
     // If already removed via logout, nothing left to grace
