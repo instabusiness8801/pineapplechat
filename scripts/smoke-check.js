@@ -98,7 +98,10 @@ const required = [
   ['agree-terms', 'terms checkbox'],
   ['content-safety.js', 'content safety script'],
   ['Terms & Safety', 'agreement section'],
-  ['18 or older', 'age gate copy']
+  ['18–99', 'age gate copy'],
+  ['pineapplechat-session', 'session restore key'],
+  ['age-datalist', 'typeable age list'],
+  ['country-datalist', 'typeable country list']
 ];
 for (const [needle, label] of required) {
   if (!html.includes(needle)) {

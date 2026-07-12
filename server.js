@@ -4,29 +4,33 @@ const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const vm = require('vm');
+const crypto = require('crypto');
 const safety = require(path.join(__dirname, 'public', 'content-safety.js'));
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*' }
+  cors: { origin: '*' },
+  // Helpful behind Render / mobile proxies
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Production: demos off by default. Local testing: set ENABLE_DEMO_USERS=true
 const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
+/** Keep user on the online list & allow seamless rejoin for this long after disconnect */
+const SESSION_GRACE_MS = 2 * 60 * 1000;
 
-// Public config for the frontend (no secrets)
 app.get('/api/config', (req, res) => {
   res.json({
     enableDemoUsers: ENABLE_DEMO_USERS,
     appName: 'PineappleChat',
-    minAge: safety.MIN_AGE || 18
+    minAge: safety.MIN_AGE || 18,
+    sessionGraceMs: SESSION_GRACE_MS
   });
 });
 
-// Load locked country/city lists (same file the browser uses)
 function loadWorldLocations() {
   try {
     const src = fs.readFileSync(path.join(__dirname, 'public', 'world-locations.js'), 'utf8');
@@ -51,11 +55,17 @@ function isValidLocation(country, city) {
   );
 }
 
-// State
-// onlineUsers: socketId -> { profile }  (always resolve live socket via io.sockets.sockets)
-const onlineUsers = new Map();
-const pairs = new Map(); // socketId -> partnerSocketId (legacy pairing ids)
-const blockedUsers = new Map(); // socketId -> Set<blockedSocketIds>
+// ---- Session-aware presence (survives refresh for SESSION_GRACE_MS) ----
+// token -> { profile, socketId|null, disconnectedAt|null, graceTimer|null, pending: [] }
+const sessions = new Map();
+// socketId -> token
+const socketToSession = new Map();
+const pairs = new Map(); // socketId -> partnerSocketId
+const blockedUsers = new Map(); // socketId -> Set
+
+function newSessionToken() {
+  return crypto.randomBytes(16).toString('hex');
+}
 
 function getLiveSocket(socketId) {
   if (!socketId) return null;
@@ -63,13 +73,35 @@ function getLiveSocket(socketId) {
   return s && s.connected ? s : null;
 }
 
-function getPartnerId(socketId) {
-  return pairs.get(socketId) || null;
+function getSessionBySocket(socketId) {
+  const token = socketToSession.get(socketId);
+  return token ? sessions.get(token) : null;
 }
 
-function pairUsers(socketA, socketB) {
-  pairs.set(socketA.id, socketB.id);
-  pairs.set(socketB.id, socketA.id);
+function getSessionByToken(token) {
+  return token ? sessions.get(token) : null;
+}
+
+function resolveLiveSocketForTarget(targetId) {
+  // targetId may be current socket id OR a session token
+  let s = getLiveSocket(targetId);
+  if (s) return { socket: s, session: getSessionBySocket(targetId) };
+  const sess = getSessionByToken(targetId);
+  if (sess && sess.socketId) {
+    s = getLiveSocket(sess.socketId);
+    if (s) return { socket: s, session: sess };
+  }
+  // Find session whose socketId matches targetId but briefly disconnected
+  for (const sess of sessions.values()) {
+    if (sess.socketId === targetId && getLiveSocket(sess.socketId)) {
+      return { socket: getLiveSocket(sess.socketId), session: sess };
+    }
+  }
+  return { socket: null, session: sess || null };
+}
+
+function getPartnerId(socketId) {
+  return pairs.get(socketId) || null;
 }
 
 function unpair(socketId) {
@@ -86,14 +118,50 @@ function isBlocked(userA, userB) {
   return false;
 }
 
-// Prune offline entries, then build the public online list
-function buildOnlineList() {
-  for (const [id] of onlineUsers.entries()) {
-    if (!getLiveSocket(id)) onlineUsers.delete(id);
+function clearGraceTimer(sess) {
+  if (sess && sess.graceTimer) {
+    clearTimeout(sess.graceTimer);
+    sess.graceTimer = null;
   }
+}
+
+function removeSession(token, reason) {
+  const sess = sessions.get(token);
+  if (!sess) return;
+  clearGraceTimer(sess);
+  if (sess.socketId) {
+    socketToSession.delete(sess.socketId);
+    blockedUsers.delete(sess.socketId);
+    unpair(sess.socketId);
+  }
+  sessions.delete(token);
+  console.log(`[session] removed ${sess.profile && sess.profile.username} (${reason})`);
+}
+
+function buildOnlineList() {
   const list = [];
-  for (const [id, data] of onlineUsers.entries()) {
-    list.push({ id, profile: data.profile });
+  const now = Date.now();
+  for (const [token, sess] of sessions.entries()) {
+    const live = sess.socketId && getLiveSocket(sess.socketId);
+    const inGrace =
+      !live &&
+      sess.disconnectedAt &&
+      now - sess.disconnectedAt < SESSION_GRACE_MS;
+
+    if (!live && !inGrace) {
+      // Expired grace — clean up
+      if (sess.disconnectedAt) removeSession(token, 'grace-expired-prune');
+      continue;
+    }
+
+    // Prefer live socket id; during grace keep last socket id so clients can match chats
+    const id = live ? sess.socketId : sess.socketId || token;
+    list.push({
+      id,
+      sessionToken: token,
+      profile: sess.profile,
+      away: !live && !!inGrace
+    });
   }
   return list;
 }
@@ -103,13 +171,13 @@ function broadcastOnlineUsers() {
 }
 
 function broadcastStats() {
-  buildOnlineList(); // prune first
-  const online = onlineUsers.size;
+  const list = buildOnlineList();
+  const online = list.length;
   let chattingPairs = 0;
   const seen = new Set();
   for (const [a, b] of pairs.entries()) {
     if (seen.has(a) || seen.has(b)) continue;
-    if (onlineUsers.has(a) && onlineUsers.has(b)) {
+    if (socketToSession.has(a) && socketToSession.has(b)) {
       chattingPairs += 1;
       seen.add(a);
       seen.add(b);
@@ -118,33 +186,35 @@ function broadcastStats() {
   io.emit('stats', { online, chatting: chattingPairs });
 }
 
+function flushPending(sess) {
+  if (!sess || !sess.pending || !sess.pending.length) return;
+  const sock = getLiveSocket(sess.socketId);
+  if (!sock) return;
+  const queue = sess.pending.splice(0, sess.pending.length);
+  for (const msg of queue) {
+    if (msg.type === 'message') {
+      sock.emit('receive-message', msg.payload);
+    } else if (msg.type === 'attachment') {
+      sock.emit('receive-attachment', msg.payload);
+    } else if (msg.type === 'chat-started') {
+      sock.emit('chat-started', msg.payload);
+    }
+  }
+}
+
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
-  // Send accurate snapshot immediately so late joiners see who is already online
   socket.emit('online-users', buildOnlineList());
-  socket.emit('stats', {
-    online: onlineUsers.size,
-    chatting: 0
-  });
   broadcastStats();
 
-  // Client can pull a fresh list anytime (e.g. after reconnect / opening hub)
   socket.on('request-online-users', () => {
     socket.emit('online-users', buildOnlineList());
     broadcastStats();
   });
 
-  // User sets their profile and becomes visible in the online list
   socket.on('set-profile', (profile) => {
-    const cleanedProfile = profile || {
-      username: 'Anonymous',
-      gender: 'other',
-      age: 18,
-      location: 'Unknown',
-      image: null,
-      preference: 'anyone'
-    };
+    const cleanedProfile = profile || {};
 
     const country = (cleanedProfile.country || '').trim();
     const city = (cleanedProfile.city || '').trim();
@@ -159,7 +229,6 @@ io.on('connection', (socket) => {
     cleanedProfile.city = city;
     cleanedProfile.location = `${city}, ${country}`;
 
-    // Age: 18+ only (adults only platform)
     if (!safety.isValidAge(cleanedProfile.age)) {
       socket.emit('profile-error', {
         field: 'age',
@@ -169,7 +238,6 @@ io.on('connection', (socket) => {
     }
     cleanedProfile.age = safety.parseAge(cleanedProfile.age);
 
-    // Must accept terms / community agreement
     if (!cleanedProfile.agreedToTerms) {
       socket.emit('profile-error', {
         field: 'terms',
@@ -178,14 +246,12 @@ io.on('connection', (socket) => {
       return;
     }
     cleanedProfile.agreedToTerms = true;
-    cleanedProfile.agreedAt = new Date().toISOString();
+    cleanedProfile.agreedAt = cleanedProfile.agreedAt || new Date().toISOString();
 
-    // Gender lock to allowed values
     if (cleanedProfile.gender !== 'male' && cleanedProfile.gender !== 'female') {
       cleanedProfile.gender = 'male';
     }
 
-    // Username safety
     const nameCheck = safety.validateUsername(cleanedProfile.username);
     if (!nameCheck.ok) {
       socket.emit('profile-error', {
@@ -196,7 +262,6 @@ io.on('connection', (socket) => {
     }
     cleanedProfile.username = nameCheck.text;
 
-    // Optional "what's on your mind" — same content rules as chat
     if (cleanedProfile.whatsOnMind) {
       const mindCheck = safety.validateWhatsOnMind(cleanedProfile.whatsOnMind);
       if (!mindCheck.ok) {
@@ -211,67 +276,142 @@ io.on('connection', (socket) => {
 
     const newUsername = (cleanedProfile.username || '').trim().toLowerCase();
 
-    // Enforce unique usernames
+    // Resume existing session within grace window
+    let token = typeof cleanedProfile.sessionToken === 'string' ? cleanedProfile.sessionToken.trim() : '';
+    let sess = token ? sessions.get(token) : null;
+
+    // Unique username among *other* live/grace sessions
     if (newUsername && newUsername !== 'anonymous') {
-      for (const [id, data] of onlineUsers.entries()) {
-        if (id !== socket.id && data.profile) {
-          const existing = (data.profile.username || '').trim().toLowerCase();
-          if (existing === newUsername) {
+      for (const [t, other] of sessions.entries()) {
+        if (sess && t === token) continue;
+        const existing = (other.profile && other.profile.username || '').trim().toLowerCase();
+        if (existing === newUsername) {
+          // Same session reconnecting is OK; different session takes the name → error
+          const otherLive = other.socketId && getLiveSocket(other.socketId);
+          const otherGrace =
+            other.disconnectedAt && Date.now() - other.disconnectedAt < SESSION_GRACE_MS;
+          if (otherLive || otherGrace) {
             socket.emit('profile-error', {
               field: 'username',
               message: 'This username is already taken. Please choose a different one.'
             });
-            return; // do not add
+            return;
           }
         }
       }
     }
 
-    socket.profile = cleanedProfile;
+    if (sess) {
+      // Rebind to new socket id
+      clearGraceTimer(sess);
+      if (sess.socketId && sess.socketId !== socket.id) {
+        socketToSession.delete(sess.socketId);
+        // Migrate pair/block keys if needed
+        if (pairs.has(sess.socketId)) {
+          const p = pairs.get(sess.socketId);
+          pairs.delete(sess.socketId);
+          pairs.set(socket.id, p);
+          if (p && pairs.get(p) === sess.socketId) pairs.set(p, socket.id);
+        }
+        if (blockedUsers.has(sess.socketId)) {
+          blockedUsers.set(socket.id, blockedUsers.get(sess.socketId));
+          blockedUsers.delete(sess.socketId);
+        }
+      }
+      sess.socketId = socket.id;
+      sess.disconnectedAt = null;
+      sess.profile = cleanedProfile;
+      sess.profile.sessionToken = token;
+    } else {
+      token = newSessionToken();
+      sess = {
+        profile: cleanedProfile,
+        socketId: socket.id,
+        disconnectedAt: null,
+        graceTimer: null,
+        pending: []
+      };
+      cleanedProfile.sessionToken = token;
+      sess.profile = cleanedProfile;
+      sessions.set(token, sess);
+    }
 
-    // Add or update in online list (profile only — live socket resolved via id)
-    onlineUsers.set(socket.id, {
-      profile: socket.profile
+    socketToSession.set(socket.id, token);
+    socket.profile = cleanedProfile;
+    socket.sessionToken = token;
+
+    socket.emit('profile-accepted', {
+      id: socket.id,
+      sessionToken: token,
+      sessionGraceMs: SESSION_GRACE_MS
     });
 
-    socket.emit('profile-accepted', { id: socket.id });
+    flushPending(sess);
 
-    // Send full list to this client first, then everyone (fixes late-join / mobile race)
     const list = buildOnlineList();
     socket.emit('online-users', list);
     io.emit('online-users', list);
     broadcastStats();
-    console.log(`[profile] ${cleanedProfile.username} (${socket.id}) online=${onlineUsers.size}`);
+    console.log(`[profile] ${cleanedProfile.username} socket=${socket.id} token=${token.slice(0, 8)}… online=${list.length}`);
   });
 
-  // User explicitly chooses someone to chat with (no auto matching)
   socket.on('start-chat-with', (data) => {
     const targetId = data && data.targetId;
     if (!targetId || targetId === socket.id) return;
 
-    if (!onlineUsers.has(socket.id) || !socket.profile) {
+    if (!socket.sessionToken || !getSessionByToken(socket.sessionToken)) {
       socket.emit('chat-error', { message: 'Please complete your profile first.' });
       return;
     }
 
-    const targetSocket = getLiveSocket(targetId);
-    const targetData = onlineUsers.get(targetId);
-    if (!targetSocket || !targetData) {
+    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+    if (!targetSocket || !targetSess) {
+      // If target is in grace (away), still allow chat-started on our side; queue for them
+      const awaySess =
+        getSessionByToken(targetId) ||
+        [...sessions.values()].find((s) => s.socketId === targetId);
+      if (awaySess && awaySess.disconnectedAt) {
+        const myProfile = socket.profile;
+        socket.emit('chat-started', {
+          partnerId: awaySess.socketId || targetId,
+          partnerProfile: awaySess.profile,
+          partnerSessionToken: [...sessions.entries()].find(([, s]) => s === awaySess)?.[0]
+        });
+        awaySess.pending = awaySess.pending || [];
+        awaySess.pending.push({
+          type: 'chat-started',
+          payload: {
+            partnerId: socket.id,
+            partnerProfile: myProfile,
+            partnerSessionToken: socket.sessionToken
+          }
+        });
+        return;
+      }
       socket.emit('chat-error', { message: 'That user is no longer online.' });
       broadcastOnlineUsers();
       return;
     }
 
-    if (isBlocked(socket.id, targetId)) {
+    if (isBlocked(socket.id, targetSocket.id)) {
       socket.emit('chat-error', { message: 'You have blocked this user or they have blocked you.' });
       return;
     }
 
-    const myProfile = socket.profile || (onlineUsers.get(socket.id) && onlineUsers.get(socket.id).profile);
-    const theirProfile = targetData.profile;
+    const myProfile = socket.profile;
+    const theirProfile = targetSess.profile;
+    const theirToken = socketToSession.get(targetSocket.id);
 
-    socket.emit('chat-started', { partnerId: targetId, partnerProfile: theirProfile });
-    targetSocket.emit('chat-started', { partnerId: socket.id, partnerProfile: myProfile });
+    socket.emit('chat-started', {
+      partnerId: targetSocket.id,
+      partnerProfile: theirProfile,
+      partnerSessionToken: theirToken
+    });
+    targetSocket.emit('chat-started', {
+      partnerId: socket.id,
+      partnerProfile: myProfile,
+      partnerSessionToken: socket.sessionToken
+    });
 
     broadcastStats();
   });
@@ -281,15 +421,6 @@ io.on('connection', (socket) => {
     const text = data && data.text;
     if (!targetId || typeof text !== 'string') return;
 
-    const targetSocket = getLiveSocket(targetId);
-    if (!targetSocket || !onlineUsers.has(targetId)) {
-      socket.emit('chat-error', { message: 'Message not delivered — that user is offline.' });
-      return;
-    }
-
-    if (isBlocked(socket.id, targetId)) return;
-
-    // Links, contact info, and dangerous / prohibited language
     const check = safety.validateChatText(text);
     if (!check.ok) {
       socket.emit('chat-error', { message: check.message || 'Message blocked by safety filters.' });
@@ -299,28 +430,47 @@ io.on('connection', (socket) => {
     const payload = {
       text: clean,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      senderId: socket.id
+      senderId: socket.id,
+      senderSessionToken: socket.sessionToken
     };
 
-    // Deliver to recipient (fromSelf false) and confirm to sender (fromSelf true)
-    targetSocket.emit('receive-message', { ...payload, fromSelf: false });
-    socket.emit('receive-message', { ...payload, fromSelf: true });
+    if (isBlocked(socket.id, targetId)) return;
+
+    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+
+    if (targetSocket) {
+      targetSocket.emit('receive-message', { ...payload, fromSelf: false });
+      socket.emit('receive-message', { ...payload, fromSelf: true });
+      return;
+    }
+
+    // Target temporarily disconnected within grace — queue message
+    const awaySess =
+      targetSess ||
+      getSessionByToken(targetId) ||
+      [...sessions.values()].find((s) => s.socketId === targetId);
+
+    if (awaySess && awaySess.disconnectedAt && Date.now() - awaySess.disconnectedAt < SESSION_GRACE_MS) {
+      awaySess.pending = awaySess.pending || [];
+      awaySess.pending.push({ type: 'message', payload: { ...payload, fromSelf: false } });
+      if (awaySess.pending.length > 50) awaySess.pending.shift();
+      socket.emit('receive-message', { ...payload, fromSelf: true });
+      socket.emit('chat-error', {
+        message: 'User is reconnecting — message will be delivered when they are back (within 2 min).'
+      });
+      return;
+    }
+
+    socket.emit('chat-error', { message: 'Message not delivered — that user is offline.' });
   });
 
   socket.on('send-attachment-to', (data) => {
     const targetId = data && data.targetId;
-    const attachment = data && data.attachment; // { data: base64, type: mime, name }
+    const attachment = data && data.attachment;
     if (!targetId || !attachment || !attachment.data) return;
-
-    const targetSocket = getLiveSocket(targetId);
-    if (!targetSocket || !onlineUsers.has(targetId)) {
-      socket.emit('chat-error', { message: 'Attachment not delivered — that user is offline.' });
-      return;
-    }
 
     if (isBlocked(socket.id, targetId)) return;
 
-    // Only allow image and video
     if (!attachment.type || (!attachment.type.startsWith('image/') && !attachment.type.startsWith('video/'))) {
       socket.emit('chat-error', { message: 'Only image and video files are allowed.' });
       return;
@@ -329,10 +479,31 @@ io.on('connection', (socket) => {
     const payload = {
       attachment,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      senderId: socket.id
+      senderId: socket.id,
+      senderSessionToken: socket.sessionToken
     };
-    targetSocket.emit('receive-attachment', { ...payload, fromSelf: false });
-    socket.emit('receive-attachment', { ...payload, fromSelf: true });
+
+    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+    if (targetSocket) {
+      targetSocket.emit('receive-attachment', { ...payload, fromSelf: false });
+      socket.emit('receive-attachment', { ...payload, fromSelf: true });
+      return;
+    }
+
+    const awaySess =
+      targetSess ||
+      getSessionByToken(targetId) ||
+      [...sessions.values()].find((s) => s.socketId === targetId);
+
+    if (awaySess && awaySess.disconnectedAt && Date.now() - awaySess.disconnectedAt < SESSION_GRACE_MS) {
+      awaySess.pending = awaySess.pending || [];
+      awaySess.pending.push({ type: 'attachment', payload: { ...payload, fromSelf: false } });
+      if (awaySess.pending.length > 20) awaySess.pending.shift();
+      socket.emit('receive-attachment', { ...payload, fromSelf: true });
+      return;
+    }
+
+    socket.emit('chat-error', { message: 'Attachment not delivered — that user is offline.' });
   });
 
   socket.on('next-stranger', () => {
@@ -348,8 +519,7 @@ io.on('connection', (socket) => {
   socket.on('leave-chat', (data) => {
     const targetId = data && data.targetId;
     if (!targetId) return;
-
-    const targetSocket = getLiveSocket(targetId);
+    const { socket: targetSocket } = resolveLiveSocketForTarget(targetId);
     if (targetSocket) {
       targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id });
     }
@@ -360,12 +530,10 @@ io.on('connection', (socket) => {
     const targetId = data && data.targetId;
     if (!targetId) return;
 
-    if (!blockedUsers.has(socket.id)) {
-      blockedUsers.set(socket.id, new Set());
-    }
+    if (!blockedUsers.has(socket.id)) blockedUsers.set(socket.id, new Set());
     blockedUsers.get(socket.id).add(targetId);
 
-    const targetSocket = getLiveSocket(targetId);
+    const { socket: targetSocket } = resolveLiveSocketForTarget(targetId);
     if (targetSocket) {
       targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id, blocked: true });
     }
@@ -375,26 +543,46 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} (${reason})`);
 
-    onlineUsers.delete(socket.id);
-    blockedUsers.delete(socket.id);
+    const token = socketToSession.get(socket.id);
+    const sess = token ? sessions.get(token) : null;
 
-    broadcastOnlineUsers();
+    if (sess) {
+      sess.disconnectedAt = Date.now();
+      // Keep socketId so list/chat remapping still works until grace ends
+      clearGraceTimer(sess);
+      sess.graceTimer = setTimeout(() => {
+        removeSession(token, 'grace-timeout');
+        broadcastOnlineUsers();
+        broadcastStats();
+      }, SESSION_GRACE_MS);
+      // Stay visible on online list during grace
+      broadcastOnlineUsers();
+      broadcastStats();
+      console.log(`[session] grace started for ${sess.profile && sess.profile.username} (${SESSION_GRACE_MS}ms)`);
+    } else {
+      socketToSession.delete(socket.id);
+      broadcastOnlineUsers();
+      broadcastStats();
+    }
 
     const partnerId = getPartnerId(socket.id);
     if (partnerId) {
       const partner = getLiveSocket(partnerId);
-      if (partner) partner.emit('partner-left', { reason: 'disconnected', partnerId: socket.id });
-      unpair(partnerId);
+      if (partner) {
+        partner.emit('partner-left', {
+          reason: 'disconnected',
+          partnerId: socket.id,
+          temporary: true,
+          graceMs: SESSION_GRACE_MS
+        });
+      }
     }
-    unpair(socket.id);
-    broadcastStats();
   });
 
-  // Typing indicators (to active partner id if client sends targetId)
   socket.on('typing', (data) => {
     const targetId = data && data.targetId;
     if (targetId) {
-      const t = getLiveSocket(targetId);
+      const { socket: t } = resolveLiveSocketForTarget(targetId);
       if (t) t.emit('typing', { fromId: socket.id });
       return;
     }
@@ -406,7 +594,7 @@ io.on('connection', (socket) => {
   socket.on('stop-typing', (data) => {
     const targetId = data && data.targetId;
     if (targetId) {
-      const t = getLiveSocket(targetId);
+      const { socket: t } = resolveLiveSocketForTarget(targetId);
       if (t) t.emit('stop-typing', { fromId: socket.id });
       return;
     }
@@ -419,6 +607,7 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\nPineappleChat running on http://localhost:${PORT}`);
-  console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON (ENABLE_DEMO_USERS=true)' : 'OFF (production default)'}`);
+  console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON' : 'OFF'}`);
+  console.log(`Session grace: ${SESSION_GRACE_MS / 1000}s after disconnect`);
   console.log('Open that URL in your browser to start chatting!\n');
 });

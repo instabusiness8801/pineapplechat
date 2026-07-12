@@ -857,33 +857,32 @@
               </div>
             </div>
 
-            <!-- Age: 18+ only — locked dropdown (18–99) -->
+            <!-- Age: type or pick (18–99 only, validated) -->
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-1.5" for="age">AGE <span class="text-red-500">*</span></label>
-              <select id="age" required aria-describedby="age-hint"
-                      class="w-full theme-input theme-input-green border focus-ring-colorful rounded-xl px-4 py-2.5 text-sm outline-none">
-                <option value="" disabled selected>Select age…</option>
-                <!-- options 18–99 filled by JS -->
-              </select>
-              <div id="age-hint" class="text-[10px] text-gray-500 mt-1">You must be <strong>18 or older</strong> to use PineappleChat (18–99).</div>
+              <input id="age" type="text" inputmode="numeric" list="age-datalist" required
+                     placeholder="Type age e.g. 24" autocomplete="off" aria-describedby="age-hint"
+                     class="w-full theme-input theme-input-green border focus-ring-colorful rounded-xl px-4 py-2.5 text-sm outline-none">
+              <datalist id="age-datalist"></datalist>
+              <div id="age-hint" class="text-[10px] text-gray-500 mt-1">Type or pick — must be <strong>18–99</strong>.</div>
             </div>
 
-            <!-- Location: locked dropdowns (no free-text / fake locations) -->
+            <!-- Location: type-to-search (still only valid list values accepted) -->
             <div>
               <label class="block text-xs font-medium text-gray-500 mb-0.5">LOCATION <span class="text-red-500">*</span></label>
-              <div class="text-[10px] text-gray-500 mb-1.5">Select Country then City from the list (required).</div>
-              <div class="grid grid-cols-2 gap-2">
+              <div class="text-[10px] text-gray-500 mb-1.5">Type to search Country and City (must match list).</div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <select id="country" required
-                          class="w-full theme-input theme-field-yellow border focus-ring-colorful rounded-xl px-3 py-2 text-sm outline-none">
-                    <option value="" disabled selected>Select country…</option>
-                  </select>
+                  <input id="country" type="text" list="country-datalist" required
+                         placeholder="Type country…" autocomplete="off"
+                         class="w-full theme-input theme-field-yellow border focus-ring-colorful rounded-xl px-3 py-2.5 text-sm outline-none">
+                  <datalist id="country-datalist"></datalist>
                 </div>
                 <div>
-                  <select id="city" required disabled
-                          class="w-full theme-input theme-input-green border focus-ring-colorful rounded-xl px-3 py-2 text-sm outline-none disabled:opacity-50">
-                    <option value="" disabled selected>Select city…</option>
-                  </select>
+                  <input id="city" type="text" list="city-datalist" required
+                         placeholder="Type city…" autocomplete="off"
+                         class="w-full theme-input theme-input-green border focus-ring-colorful rounded-xl px-3 py-2.5 text-sm outline-none">
+                  <datalist id="city-datalist"></datalist>
                 </div>
               </div>
             </div>
@@ -1316,31 +1315,117 @@
       if (startScreen) {
         startScreen.classList.add('hidden');
         startScreen.setAttribute('inert', '');
+        startScreen.style.display = 'none';
       }
       if (chatHub) {
         chatHub.classList.add('hidden');
         chatHub.setAttribute('inert', '');
+        chatHub.style.display = 'none';
       }
 
       if (screen === 'start' && startScreen) {
         setMobileChatOpen(false);
         startScreen.classList.remove('hidden');
         startScreen.removeAttribute('inert');
+        startScreen.style.display = '';
         if (typeof renderStartOnlineList === 'function') renderStartOnlineList();
-        // Ensure profile location dropdowns are ready
-        if (typeof initLocationDropdowns === 'function') initLocationDropdowns();
+        if (typeof initLocationDropdowns === 'function') initLocationDropdowns(true);
+        window.scrollTo(0, 0);
       }
       if (screen === 'hub' && chatHub) {
-        // On mobile, start on user list unless a chat is already active
+        // Fully replace login with chat hub (no stacked sections)
+        if (startScreen) {
+          startScreen.classList.add('hidden');
+          startScreen.setAttribute('inert', '');
+          startScreen.style.display = 'none';
+        }
         if (!activeChatId) setMobileChatOpen(false);
         else if (isMobileLayout()) setMobileChatOpen(true);
         chatHub.classList.remove('hidden');
         chatHub.removeAttribute('inert');
-        if (typeof initLocationDropdowns === 'function') initLocationDropdowns();
+        chatHub.style.display = '';
+        if (typeof initLocationDropdowns === 'function') initLocationDropdowns(true);
         renderSidebarUsers();
+        window.scrollTo(0, 0);
       }
 
       currentState = screen;
+    }
+
+    // ---- Session restore (2 minutes) ----
+    const SESSION_KEY = 'pineapplechat-session';
+    const SESSION_GRACE_MS = 2 * 60 * 1000;
+    let sessionToken = null;
+
+    function saveSession() {
+      if (!currentProfile) return;
+      try {
+        const payload = {
+          savedAt: Date.now(),
+          sessionToken: sessionToken || currentProfile.sessionToken || null,
+          profile: currentProfile,
+          chats: chats,
+          activeChatId: activeChatId,
+          currentFilters: currentFilters
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+      } catch (e) { /* quota / private mode */ }
+    }
+
+    function loadSession() {
+      try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (!raw) return null;
+        const data = JSON.parse(raw);
+        if (!data || !data.savedAt || !data.profile) return null;
+        if (Date.now() - data.savedAt > SESSION_GRACE_MS) {
+          localStorage.removeItem(SESSION_KEY);
+          return null;
+        }
+        return data;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function clearSession() {
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+      sessionToken = null;
+    }
+
+    function remapChatsFromOnlineList(users) {
+      // When partners reconnect they get new socket ids — rematch by sessionToken or username
+      const list = users || allOnlineUsers || [];
+      const byToken = new Map();
+      const byName = new Map();
+      list.forEach(u => {
+        if (u.sessionToken) byToken.set(u.sessionToken, u);
+        if (u.profile && u.profile.username) byName.set(String(u.profile.username).toLowerCase(), u);
+      });
+
+      const next = {};
+      Object.keys(chats).forEach(oldId => {
+        const c = chats[oldId];
+        let match = null;
+        if (c.partnerSessionToken && byToken.has(c.partnerSessionToken)) {
+          match = byToken.get(c.partnerSessionToken);
+        } else if (c.partnerProfile && c.partnerProfile.username) {
+          match = byName.get(String(c.partnerProfile.username).toLowerCase());
+        }
+        const newId = match ? match.id : oldId;
+        if (next[newId] && newId !== oldId) {
+          // merge messages
+          next[newId].messages = (next[newId].messages || []).concat(c.messages || []);
+        } else {
+          next[newId] = c;
+          if (match) {
+            next[newId].partnerProfile = match.profile || c.partnerProfile;
+            next[newId].partnerSessionToken = match.sessionToken || c.partnerSessionToken;
+          }
+        }
+        if (activeChatId === oldId) activeChatId = newId;
+      });
+      chats = next;
     }
 
     // Escape user-controlled strings before inserting into HTML
@@ -1420,34 +1505,18 @@
       return Number.isFinite(n) && n >= MIN_AGE && n <= MAX_AGE;
     }
 
-    // Fill age <select> with 18…99 once (login form only)
+    // Age datalist 18…99 (type or pick)
     function populateAgeDropdown() {
-      const sel = document.getElementById('age');
-      if (!sel || sel.tagName !== 'SELECT') return;
-      if (sel.dataset.populated === '1') return;
-      const prev = sel.value;
-      // Keep first placeholder option if present
-      const placeholder = sel.querySelector('option[value=""]');
-      sel.innerHTML = '';
-      if (placeholder) {
-        sel.appendChild(placeholder);
-      } else {
-        const opt0 = document.createElement('option');
-        opt0.value = '';
-        opt0.disabled = true;
-        opt0.selected = true;
-        opt0.textContent = 'Select age…';
-        sel.appendChild(opt0);
-      }
+      const list = document.getElementById('age-datalist');
+      if (!list) return;
+      if (list.dataset.populated === '1') return;
+      list.innerHTML = '';
       for (let a = MIN_AGE; a <= MAX_AGE; a++) {
         const opt = document.createElement('option');
         opt.value = String(a);
-        opt.textContent = String(a);
-        sel.appendChild(opt);
+        list.appendChild(opt);
       }
-      if (prev && isValidAge(prev)) sel.value = prev;
-      else sel.selectedIndex = 0;
-      sel.dataset.populated = '1';
+      list.dataset.populated = '1';
     }
 
     function validateChatMessage(text) {
@@ -1480,8 +1549,9 @@
 
       socket.on('connect', () => {
         console.log('%c[client] Connected', 'color:#64748b', socket.id);
-        // Critical: after reconnect mobile often gets a NEW socket id — re-register profile
+        // Re-register within 2 min grace — new socket id, same sessionToken
         if (currentProfile) {
+          if (sessionToken) currentProfile.sessionToken = sessionToken;
           socket.emit('set-profile', currentProfile);
         }
         socket.emit('request-online-users');
@@ -1489,11 +1559,13 @@
 
       socket.on('disconnect', (reason) => {
         console.log('%c[client] Disconnected', 'color:#b45309', reason);
+        saveSession(); // keep chat history for up to 2 minutes
       });
 
       socket.on('reconnect', () => {
         console.log('%c[client] Reconnected', 'color:#64748b', socket.id);
         if (currentProfile) {
+          if (sessionToken) currentProfile.sessionToken = sessionToken;
           socket.emit('set-profile', currentProfile);
         }
         socket.emit('request-online-users');
@@ -1520,7 +1592,9 @@
           ...demos,
           ...real.filter(u => u && u.id && !demoIds.has(u.id) && u.id !== myId && u.profile)
         ];
-        // Always refresh whichever list is visible
+        // Partners may have new socket ids after refresh — rematch chats
+        remapChatsFromOnlineList(real);
+        saveSession();
         if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
           renderSidebarUsers();
         }
@@ -1532,8 +1606,9 @@
         
         const pid = data.partnerId;
         const prof = data.partnerProfile || {};
+        const pToken = data.partnerSessionToken || null;
 
-        ensureChat(pid, prof);
+        ensureChat(pid, prof, pToken);
 
         // Only add notification if not the one we are currently viewing.
         // Initiator switches locally on click. Receiver gets only notification.
@@ -1542,6 +1617,7 @@
           chats[pid].unread = (chats[pid].unread || 0) + 1;
         }
         chats[pid].lastMessageTs = Date.now();
+        saveSession();
         renderSidebarUsers();
 
         // Do NOT auto switch or set activeChatId here.
@@ -1553,14 +1629,14 @@
         if (data && data.partnerId) {
           const pid = data.partnerId;
           const prof = data.partnerProfile || {};
-          ensureChat(pid, prof);
+          ensureChat(pid, prof, data.partnerSessionToken || null);
           if (pid !== activeChatId) {
             chats[pid].consecutiveSent = 0;
             chats[pid].unread = (chats[pid].unread || 0) + 1;
           }
           chats[pid].lastMessageTs = Date.now();
+          saveSession();
           renderSidebarUsers();
-          // Do not auto switch
         }
       });
 
@@ -1576,16 +1652,22 @@
       socket.on('receive-message', (data) => {
         // For sender (fromSelf true): the message belongs to the active chat
         // For receiver (fromSelf false): belongs to the senderId
-        const targetChatId = data.fromSelf ? activeChatId : data.senderId;
+        let targetChatId = data.fromSelf ? activeChatId : data.senderId;
+        // Prefer stable session token match if we already have a chat for that partner
+        if (!data.fromSelf && data.senderSessionToken) {
+          const byTok = Object.keys(chats).find(
+            id => chats[id] && chats[id].partnerSessionToken === data.senderSessionToken
+          );
+          if (byTok) targetChatId = byTok;
+        }
         if (!targetChatId || (socket && targetChatId === socket.id)) return;
 
-        // Ensure the chat entry exists
-        ensureChat(targetChatId);
+        ensureChat(targetChatId, null, data.fromSelf ? null : data.senderSessionToken);
 
-        // Enrich with full profile from online list if available (for header etc.)
-        const fullUserMsg = allOnlineUsers.find(u => u.id === targetChatId);
+        const fullUserMsg = allOnlineUsers.find(u => u.id === targetChatId || u.sessionToken === data.senderSessionToken);
         if (fullUserMsg && fullUserMsg.profile) {
           chats[targetChatId].partnerProfile = fullUserMsg.profile;
+          if (fullUserMsg.sessionToken) chats[targetChatId].partnerSessionToken = fullUserMsg.sessionToken;
         }
 
         const isIncoming = !data.fromSelf;
@@ -1599,17 +1681,15 @@
             system: false
           });
 
-          // Reset spam counter when other responds
           chats[targetChatId].consecutiveSent = 0;
 
-          // If not currently viewing this chat, increment unread and show badge
           if (targetChatId !== activeChatId) {
             chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
           }
         }
 
-        // Bump recency (latest message first in sidebar)
         chats[targetChatId].lastMessageTs = Date.now();
+        saveSession();
         renderSidebarUsers();
 
         // Render live only for the active chat
@@ -1926,61 +2006,98 @@
       }
     }
 
-    // Populate country <select> (profile or filters). withAll: false | 'All' | 'Select'
-    function populateCountrySelect(selectEl, withAll = false, selectedValue = '') {
+    // Country/city: datalists (type-to-search) + strict validation against WORLD_LOCATIONS
+    function populateCountryDatalist(datalistId) {
       WORLD_LOCATIONS = getWorldLocations();
-      if (!selectEl) return;
-      const countries = Object.keys(WORLD_LOCATIONS || {});
+      const dl = document.getElementById(datalistId);
+      if (!dl) return;
+      const countries = Object.keys(WORLD_LOCATIONS || {}).sort((a, b) => a.localeCompare(b));
       if (!countries.length) {
         console.warn('[PineappleChat] WORLD_LOCATIONS is empty — is /world-locations.js loaded?');
         return;
       }
-      const prev = selectedValue || selectEl.value || '';
-      selectEl.innerHTML = '';
-      if (withAll) {
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = withAll === 'All' ? 'All countries' : 'Select country…';
-        selectEl.appendChild(opt);
-      }
-      countries.sort((a, b) => a.localeCompare(b)).forEach(country => {
+      dl.innerHTML = '';
+      countries.forEach(country => {
         const opt = document.createElement('option');
         opt.value = country;
-        opt.textContent = country;
-        selectEl.appendChild(opt);
+        dl.appendChild(opt);
       });
-      if (prev && WORLD_LOCATIONS[prev]) selectEl.value = prev;
     }
 
-    // Populate city <select> from chosen country only (locked list)
-    function populateCitySelect(selectEl, country, withAll = false, selectedValue = '') {
+    function populateCityDatalist(datalistId, country) {
       WORLD_LOCATIONS = getWorldLocations();
-      if (!selectEl) return;
-      const prev = selectedValue || '';
-      selectEl.innerHTML = '';
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = withAll === 'All' ? 'All cities' : 'Select city…';
-      if (!withAll) placeholder.disabled = true;
-      selectEl.appendChild(placeholder);
-
+      const dl = document.getElementById(datalistId);
+      if (!dl) return;
+      dl.innerHTML = '';
       if (country && WORLD_LOCATIONS[country]) {
         WORLD_LOCATIONS[country].forEach(city => {
           const opt = document.createElement('option');
           opt.value = city;
-          opt.textContent = city;
-          selectEl.appendChild(opt);
+          dl.appendChild(opt);
         });
-        selectEl.disabled = false;
-        if (prev && WORLD_LOCATIONS[country].includes(prev)) selectEl.value = prev;
-        else selectEl.value = '';
       } else {
-        selectEl.disabled = true;
-        selectEl.value = '';
+        // No country yet: offer nothing (or all cities would be huge)
       }
     }
 
-    // True only when both values exist in WORLD_LOCATIONS (blocks spoofed free-text)
+    // Back-compat names used by older callers
+    function populateCountrySelect(selectEl, withAll = false, selectedValue = '') {
+      if (!selectEl) return;
+      if (selectEl.tagName === 'SELECT') {
+        WORLD_LOCATIONS = getWorldLocations();
+        const countries = Object.keys(WORLD_LOCATIONS || {}).sort((a, b) => a.localeCompare(b));
+        const prev = selectedValue || selectEl.value || '';
+        selectEl.innerHTML = '';
+        if (withAll) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = withAll === 'All' ? 'All countries' : 'Select country…';
+          selectEl.appendChild(opt);
+        }
+        countries.forEach(country => {
+          const opt = document.createElement('option');
+          opt.value = country;
+          opt.textContent = country;
+          selectEl.appendChild(opt);
+        });
+        if (prev && WORLD_LOCATIONS[prev]) selectEl.value = prev;
+      } else {
+        populateCountryDatalist('country-datalist');
+        if (selectedValue) selectEl.value = selectedValue;
+      }
+    }
+
+    function populateCitySelect(selectEl, country, withAll = false, selectedValue = '') {
+      if (!selectEl) return;
+      if (selectEl.tagName === 'SELECT') {
+        WORLD_LOCATIONS = getWorldLocations();
+        const prev = selectedValue || '';
+        selectEl.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = withAll === 'All' ? 'All cities' : 'Select city…';
+        if (!withAll) placeholder.disabled = true;
+        selectEl.appendChild(placeholder);
+        if (country && WORLD_LOCATIONS[country]) {
+          WORLD_LOCATIONS[country].forEach(city => {
+            const opt = document.createElement('option');
+            opt.value = city;
+            opt.textContent = city;
+            selectEl.appendChild(opt);
+          });
+          selectEl.disabled = false;
+          if (prev && WORLD_LOCATIONS[country].includes(prev)) selectEl.value = prev;
+          else selectEl.value = '';
+        } else {
+          selectEl.disabled = !withAll;
+          selectEl.value = '';
+        }
+      } else {
+        populateCityDatalist('city-datalist', country);
+        if (selectedValue) selectEl.value = selectedValue;
+      }
+    }
+
     function isValidLocation(country, city) {
       WORLD_LOCATIONS = getWorldLocations();
       return !!(
@@ -1991,26 +2108,39 @@
       );
     }
 
+    function resolveCountryName(raw) {
+      WORLD_LOCATIONS = getWorldLocations();
+      const v = (raw || '').trim();
+      if (WORLD_LOCATIONS[v]) return v;
+      const found = Object.keys(WORLD_LOCATIONS).find(c => c.toLowerCase() === v.toLowerCase());
+      return found || '';
+    }
+
+    function resolveCityName(country, raw) {
+      WORLD_LOCATIONS = getWorldLocations();
+      if (!country || !WORLD_LOCATIONS[country]) return '';
+      const v = (raw || '').trim();
+      if (WORLD_LOCATIONS[country].includes(v)) return v;
+      const found = WORLD_LOCATIONS[country].find(c => c.toLowerCase() === v.toLowerCase());
+      return found || '';
+    }
+
     function initLocationDropdowns(force = false) {
       WORLD_LOCATIONS = getWorldLocations();
+      populateCountryDatalist('country-datalist');
       const profileCountry = document.getElementById('country');
       const profileCity = document.getElementById('city');
+      const cName = profileCountry ? resolveCountryName(profileCountry.value) : '';
+      populateCityDatalist('city-datalist', cName);
+
       const filterCountry = document.getElementById('sidebar-country-filter');
       const filterCity = document.getElementById('sidebar-city-filter');
-
-      // Populate if empty or only placeholder (or force on boot)
-      const needsCountries = (el) => force || !el || el.options.length <= 1;
-
-      if (profileCountry && needsCountries(profileCountry)) {
-        populateCountrySelect(profileCountry, 'Select', profileCountry.value);
+      if (filterCountry && filterCountry.tagName === 'SELECT') {
+        if (force || filterCountry.options.length <= 1) {
+          populateCountrySelect(filterCountry, 'All', filterCountry.value);
+        }
       }
-      if (profileCity) {
-        populateCitySelect(profileCity, profileCountry ? profileCountry.value : '', false, profileCity.value);
-      }
-      if (filterCountry && needsCountries(filterCountry)) {
-        populateCountrySelect(filterCountry, 'All', filterCountry.value);
-      }
-      if (filterCity) {
+      if (filterCity && filterCity.tagName === 'SELECT') {
         populateCitySelect(filterCity, filterCountry ? filterCountry.value : '', 'All', filterCity.value);
       }
     }
@@ -2072,19 +2202,21 @@
       input.focus();
     }
 
-    function ensureChat(pid, profile) {
+    function ensureChat(pid, profile, partnerSessionToken) {
       if (!pid || (socket && pid === socket.id)) return; // never self
       if (!chats[pid]) {
         chats[pid] = {
           partnerProfile: profile || { username: 'Stranger' },
+          partnerSessionToken: partnerSessionToken || null,
           messages: [],
           typing: false,
           unread: 0,
           consecutiveSent: 0,
           lastMessageTs: 0
         };
-      } else if (profile) {
-        chats[pid].partnerProfile = profile;
+      } else {
+        if (profile) chats[pid].partnerProfile = profile;
+        if (partnerSessionToken) chats[pid].partnerSessionToken = partnerSessionToken;
       }
       if (typeof chats[pid].lastMessageTs === 'undefined') chats[pid].lastMessageTs = 0;
     }
@@ -2423,8 +2555,10 @@
       const gender = document.querySelector('input[name="gender"]:checked')?.value || 'male';
       const ageRaw = document.getElementById('age') ? document.getElementById('age').value : '';
       const age = isValidAge(ageRaw) ? parseAgeValue(ageRaw) : MIN_AGE;
-      const country = document.getElementById('country') ? document.getElementById('country').value : '';
-      const city = document.getElementById('city') ? document.getElementById('city').value.trim() : '';
+      const countryRaw = document.getElementById('country') ? document.getElementById('country').value : '';
+      const cityRaw = document.getElementById('city') ? document.getElementById('city').value : '';
+      const country = resolveCountryName(countryRaw);
+      const city = resolveCityName(country, cityRaw);
       const whatsOnMind = document.getElementById('whats-on-mind') ? document.getElementById('whats-on-mind').value.trim() : '';
       const agreedToTerms = !!(document.getElementById('agree-terms') && document.getElementById('agree-terms').checked);
 
@@ -2445,8 +2579,9 @@
         location: location,
         whatsOnMind: whatsOnMind,
         image: image,
-        preference: 'anyone',  // preference filter is now handled in the chat window sidebar
-        agreedToTerms: agreedToTerms
+        preference: 'anyone',
+        agreedToTerms: agreedToTerms,
+        sessionToken: sessionToken || null
       };
     }
 
@@ -2575,8 +2710,13 @@
 
           const username = document.getElementById('username').value.trim();
           const ageVal = document.getElementById('age') ? document.getElementById('age').value : '';
-          const country = document.getElementById('country') ? document.getElementById('country').value.trim() : '';
-          const city = document.getElementById('city') ? document.getElementById('city').value.trim() : '';
+          const countryRaw = document.getElementById('country') ? document.getElementById('country').value.trim() : '';
+          const cityRaw = document.getElementById('city') ? document.getElementById('city').value.trim() : '';
+          const country = resolveCountryName(countryRaw);
+          const city = resolveCityName(country, cityRaw);
+          // Normalize typed values in the fields when valid
+          if (country && document.getElementById('country')) document.getElementById('country').value = country;
+          if (city && document.getElementById('city')) document.getElementById('city').value = city;
           const genderChecked = document.querySelector('input[name="gender"]:checked');
           const agreeEl = document.getElementById('agree-terms');
           const mindVal = document.getElementById('whats-on-mind') ? document.getElementById('whats-on-mind').value : '';
@@ -2706,10 +2846,15 @@
             showScreen('start'); // go back to form
           });
 
-          s.once('profile-accepted', () => {
-            // Success: proceed to hub and pull latest online list
+          s.once('profile-accepted', (info) => {
+            if (info && info.sessionToken) {
+              sessionToken = info.sessionToken;
+              currentProfile.sessionToken = info.sessionToken;
+            }
             currentFilters = { gender: 'all', minAge: MIN_AGE, maxAge: MAX_AGE, country: '', city: '' };
+            // Replace login UI completely with chat hub
             showScreen('hub');
+            saveSession();
             if (s && s.connected) s.emit('request-online-users');
           });
 
@@ -2844,14 +2989,31 @@
       const profileCountry = document.getElementById('country');
       const profileCity = document.getElementById('city');
       if (profileCountry && profileCity) {
-        profileCountry.addEventListener('change', () => {
-          populateCitySelect(profileCity, profileCountry.value, false);
+        const onCountryTyped = () => {
+          const cName = resolveCountryName(profileCountry.value);
+          populateCityDatalist('city-datalist', cName);
+          // If typed city no longer valid for country, leave city for user to fix
           profileCountry.classList.remove('border-red-500', 'focus:border-red-500');
           profileCountry.classList.add('border-gray-300');
+        };
+        profileCountry.addEventListener('input', onCountryTyped);
+        profileCountry.addEventListener('change', onCountryTyped);
+        profileCity.addEventListener('input', () => {
+          profileCity.classList.remove('border-red-500', 'focus:border-red-500');
+          profileCity.classList.add('border-gray-300');
         });
         profileCity.addEventListener('change', () => {
           profileCity.classList.remove('border-red-500', 'focus:border-red-500');
           profileCity.classList.add('border-gray-300');
+        });
+      }
+
+      // Age: digits only while typing
+      const ageEl = document.getElementById('age');
+      if (ageEl && ageEl.tagName === 'INPUT') {
+        ageEl.addEventListener('input', () => {
+          const cleaned = sanitizeAgeDigits(ageEl.value);
+          if (ageEl.value !== cleaned) ageEl.value = cleaned;
         });
       }
 
@@ -2907,6 +3069,7 @@
 
           socket.emit('send-message-to', { targetId: activeChatId, text: val });
           multiChatInput.value = '';
+          saveSession();
           renderSidebarUsers(); // bump recency in list
         });
       }
@@ -3066,15 +3229,42 @@
       console.log('[PineappleChat] Demo users:', ENABLE_DEMO_USERS ? 'ON' : 'OFF');
       populateAgeDropdown();
       initUI();
-      // Force-fill country lists after UI hooks are ready
       initLocationDropdowns(true);
-      showScreen('start');
 
-      // Optional: connect socket eagerly but don't start searching
-      // This allows receiving live stats even on landing
-      setTimeout(() => {
+      // Restore session if refreshed within 2 minutes
+      const saved = loadSession();
+      if (saved && saved.profile) {
+        currentProfile = saved.profile;
+        sessionToken = saved.sessionToken || saved.profile.sessionToken || null;
+        if (sessionToken) currentProfile.sessionToken = sessionToken;
+        chats = saved.chats && typeof saved.chats === 'object' ? saved.chats : {};
+        activeChatId = saved.activeChatId || null;
+        if (saved.currentFilters) currentFilters = saved.currentFilters;
+        console.log('[PineappleChat] Restoring session (within 2 min grace)');
         const s = connectSocket();
-      }, 120);
+        const onAccepted = (info) => {
+          if (info && info.sessionToken) {
+            sessionToken = info.sessionToken;
+            currentProfile.sessionToken = info.sessionToken;
+          }
+          showScreen('hub');
+          saveSession();
+          if (activeChatId && chats[activeChatId]) {
+            try { switchToChat(activeChatId); } catch (e) { /* ignore */ }
+          }
+          if (s.connected) s.emit('request-online-users');
+        };
+        s.once('profile-accepted', onAccepted);
+        if (s.connected) {
+          s.emit('set-profile', currentProfile);
+        } else {
+          s.once('connect', () => s.emit('set-profile', currentProfile));
+        }
+      } else {
+        clearSession();
+        showScreen('start');
+        setTimeout(() => { connectSocket(); }, 120);
+      }
     }
 
     if (document.readyState === 'complete') boot();
