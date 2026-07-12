@@ -1,8 +1,11 @@
 {
   "name": "pineapplechat",
   "version": "1.0.0",
-  "description": "",
+  "description": "PineappleChat — real-time stranger chat (18+)",
   "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"

@@ -14,6 +14,18 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Production: demos off by default. Local testing: set ENABLE_DEMO_USERS=true
+const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
+
+// Public config for the frontend (no secrets)
+app.get('/api/config', (req, res) => {
+  res.json({
+    enableDemoUsers: ENABLE_DEMO_USERS,
+    appName: 'PineappleChat',
+    minAge: safety.MIN_AGE || 18
+  });
+});
+
 // Load locked country/city lists (same file the browser uses)
 function loadWorldLocations() {
   try {
@@ -373,5 +385,6 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`\nPineappleChat running on http://localhost:${PORT}`);
+  console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON (ENABLE_DEMO_USERS=true)' : 'OFF (production default)'}`);
   console.log('Open that URL in your browser to start chatting!\n');
 });

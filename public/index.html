@@ -610,12 +610,12 @@
         <div class="surface-card card-teal rounded-3xl p-4 sticky top-4">
           <div class="flex items-center justify-between mb-2">
             <h3 class="font-semibold text-sm theme-text-strong">Who's online</h3>
-            <span class="text-[10px] px-2 py-0.5 rounded-full chip-yellow font-medium">Demo + real</span>
+            <span id="online-list-badge" class="text-[10px] px-2 py-0.5 rounded-full chip-green font-medium">Live</span>
           </div>
           <div id="start-online-list" class="space-y-1 text-xs max-h-[420px] overflow-auto">
             <!-- populated by JS -->
           </div>
-          <p class="text-[9px] text-gray-500 mt-2">Click any user below to chat — but you must fill your details on the right first!</p>
+          <p class="text-[9px] text-gray-500 mt-2">Fill your details on the right, then click a user to chat.</p>
         </div>
       </div>
 
@@ -988,7 +988,8 @@
       { id: 'chill',  label: 'Chill',  url: 'https://api.dicebear.com/9.x/thumbs/png?seed=ChillVibes&size=128' }
     ];
 
-    // Seed dummy users for homepage demo (so always see online even before profile)
+    // Demo users: OFF for production (Render). Local only if ENABLE_DEMO_USERS=true on server.
+    let ENABLE_DEMO_USERS = false;
     const DUMMY_USERS = [
       {
         id: 'demo-superman',
@@ -1020,7 +1021,24 @@
       }
     ];
 
-    allOnlineUsers = [...DUMMY_USERS];
+    // Start empty — only real users unless demos enabled via /api/config
+    allOnlineUsers = [];
+
+    function getDemoUsers() {
+      return ENABLE_DEMO_USERS ? DUMMY_USERS : [];
+    }
+
+    function applyOnlineListBadge() {
+      const badge = document.getElementById('online-list-badge');
+      if (!badge) return;
+      if (ENABLE_DEMO_USERS) {
+        badge.textContent = 'Demo + live';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded-full chip-yellow font-medium';
+      } else {
+        badge.textContent = 'Live';
+        badge.className = 'text-[10px] px-2 py-0.5 rounded-full chip-green font-medium';
+      }
+    }
 
     // Multi-chat state
     let chats = {};           // { partnerId: { partnerProfile, messages: [], typing: false } }
@@ -1247,10 +1265,11 @@
 
       socket.on('online-users', (users) => {
         const real = users || [];
-        const demoIds = DUMMY_USERS.map(u => u.id);
+        const demos = getDemoUsers();
+        const demoIds = demos.map(u => u.id);
         const myId = socket ? socket.id : null;
         allOnlineUsers = [
-          ...DUMMY_USERS,
+          ...demos,
           ...real.filter(u => !demoIds.includes(u.id) && (!myId || u.id !== myId))
         ];
         if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
@@ -1948,8 +1967,12 @@
       if (!container) return;
       container.innerHTML = '';
       const myId = socket ? socket.id : null;
-      allOnlineUsers.forEach(user => {
-        if (myId && user.id === myId) return;
+      const others = allOnlineUsers.filter(user => !(myId && user.id === myId));
+      if (others.length === 0) {
+        container.innerHTML = '<div class="text-[11px] theme-muted text-center py-4 px-2">No one else online yet. Open another browser or invite a friend!</div>';
+        return;
+      }
+      others.forEach(user => {
         const p = user.profile;
         const div = document.createElement('div');
         const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : 'border border-gray-200');
@@ -2744,11 +2767,26 @@
     }
 
     // Boot
-    function boot() {
+    async function boot() {
       initThemeToggle();
+
+      // Production default: no demo users. Server sets enableDemoUsers only if ENABLE_DEMO_USERS=true
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const cfg = await res.json();
+          ENABLE_DEMO_USERS = !!cfg.enableDemoUsers;
+        }
+      } catch (e) {
+        ENABLE_DEMO_USERS = false;
+      }
+      applyOnlineListBadge();
+      allOnlineUsers = getDemoUsers();
+
       WORLD_LOCATIONS = getWorldLocations();
       const n = Object.keys(WORLD_LOCATIONS).length;
       console.log('[PineappleChat] Loaded', n, 'countries for location dropdowns');
+      console.log('[PineappleChat] Demo users:', ENABLE_DEMO_USERS ? 'ON' : 'OFF');
       populateAgeDropdown();
       initUI();
       // Force-fill country lists after UI hooks are ready
