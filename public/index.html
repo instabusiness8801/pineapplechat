@@ -1338,6 +1338,8 @@
         if (typeof renderStartOnlineList === 'function') renderStartOnlineList();
         if (typeof initLocationDropdowns === 'function') initLocationDropdowns(true);
         window.scrollTo(0, 0);
+        // Login form: do not trap browser back
+        if (typeof disableNavigationGuard === 'function') disableNavigationGuard();
       }
       if (screen === 'hub' && chatHub) {
         // Fully replace login with chat hub (no stacked sections)
@@ -1354,6 +1356,9 @@
         if (typeof initLocationDropdowns === 'function') initLocationDropdowns(true);
         renderSidebarUsers();
         window.scrollTo(0, 0);
+        // Trap browser back → confirm log off while in hub
+        allowHistoryLeave = false;
+        if (typeof enableNavigationGuard === 'function') enableNavigationGuard();
       }
 
       currentState = screen;
@@ -1366,6 +1371,10 @@
     let sessionToken = null;
     /** Set true after intentional Log off so reconnect never re-registers the old profile. */
     let intentionalLogout = false;
+    /** When true, browser back / leave is allowed without re-prompting. */
+    let allowHistoryLeave = false;
+    /** Dedup ids for pending/live messages after refresh */
+    const seenMsgIds = new Set();
 
     function saveSession() {
       if (!currentProfile || intentionalLogout) return;
@@ -1441,6 +1450,7 @@
 
       showScreen('start');
       updateLogoutButtonVisibility();
+      disableNavigationGuard();
       // Refresh local online list (we should no longer appear; others already got broadcast)
       if (socket && socket.connected) {
         socket.emit('request-online-users');
@@ -1449,10 +1459,183 @@
       }
     }
 
-    function logOff() {
-      if (!confirm('Log off? You will leave the online list and clear this device session.')) return;
+    // ---- Browser back / leave guard (hub only) ----
+    function shouldGuardNavigation() {
+      return !!(currentProfile && currentState === 'hub' && !intentionalLogout && !allowHistoryLeave);
+    }
+
+    function enableNavigationGuard() {
+      if (window._pcNavGuardBound) return;
+      window._pcNavGuardBound = true;
+      // Seed history so the first Back is interceptable
+      try {
+        history.pushState({ pineappleHub: true }, '', location.href);
+      } catch (e) { /* ignore */ }
+      window.addEventListener('popstate', onBrowserBack);
+      window.addEventListener('beforeunload', onBeforeUnloadGuard);
+    }
+
+    function disableNavigationGuard() {
+      window._pcNavGuardBound = false;
+      window.removeEventListener('popstate', onBrowserBack);
+      window.removeEventListener('beforeunload', onBeforeUnloadGuard);
+    }
+
+    function onBrowserBack(e) {
+      if (!shouldGuardNavigation()) return;
+      // Re-push so user stays on the app until they confirm log off
+      try {
+        history.pushState({ pineappleHub: true }, '', location.href);
+      } catch (err) { /* ignore */ }
+      const leave = confirm(
+        'Leave PineappleChat?\n\nOK = Log off and leave\nCancel = Stay on the app'
+      );
+      if (leave) {
+        allowHistoryLeave = true;
+        logOff({ skipConfirm: true });
+      }
+    }
+
+    function onBeforeUnloadGuard(e) {
+      if (!shouldGuardNavigation()) return;
+      // Modern browsers show a generic "Leave site?" dialog; we cannot customize text.
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+
+    function resolveIncomingChatId(data) {
+      if (!data) return null;
+      if (data.fromSelf) return activeChatId;
+      // Prefer stable session token match
+      if (data.senderSessionToken) {
+        const byTok = Object.keys(chats).find(
+          id => chats[id] && chats[id].partnerSessionToken === data.senderSessionToken
+        );
+        if (byTok) return byTok;
+      }
+      // Match by username if sender profile present
+      if (data.senderProfile && data.senderProfile.username) {
+        const uname = String(data.senderProfile.username).toLowerCase();
+        const byName = Object.keys(chats).find(id => {
+          const p = chats[id] && chats[id].partnerProfile;
+          return p && String(p.username || '').toLowerCase() === uname;
+        });
+        if (byName) return byName;
+      }
+      if (data.senderId) return data.senderId;
+      return null;
+    }
+
+    function storeIncomingMessage(data) {
+      if (!data || data.fromSelf) return null;
+      if (data.msgId) {
+        if (seenMsgIds.has(data.msgId)) return null;
+        seenMsgIds.add(data.msgId);
+        // Bound memory
+        if (seenMsgIds.size > 500) {
+          const first = seenMsgIds.values().next().value;
+          seenMsgIds.delete(first);
+        }
+      }
+
+      const targetChatId = resolveIncomingChatId(data);
+      if (!targetChatId || (socket && targetChatId === socket.id)) return null;
+
+      ensureChat(
+        targetChatId,
+        data.senderProfile || null,
+        data.senderSessionToken || null
+      );
+
+      const fullUserMsg = allOnlineUsers.find(
+        u => u.id === targetChatId || (data.senderSessionToken && u.sessionToken === data.senderSessionToken)
+      );
+      if (fullUserMsg && fullUserMsg.profile) {
+        chats[targetChatId].partnerProfile = fullUserMsg.profile;
+        if (fullUserMsg.sessionToken) chats[targetChatId].partnerSessionToken = fullUserMsg.sessionToken;
+      } else if (data.senderProfile) {
+        chats[targetChatId].partnerProfile = {
+          ...(chats[targetChatId].partnerProfile || {}),
+          ...data.senderProfile
+        };
+      }
+      if (data.senderSessionToken) {
+        chats[targetChatId].partnerSessionToken = data.senderSessionToken;
+      }
+
+      chats[targetChatId].messages.push({
+        text: data.text,
+        fromSelf: false,
+        time: data.time,
+        system: false,
+        msgId: data.msgId || null
+      });
+      chats[targetChatId].consecutiveSent = 0;
+      if (targetChatId !== activeChatId) {
+        chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
+      }
+      chats[targetChatId].lastMessageTs = Date.now();
+      saveSession();
+      return targetChatId;
+    }
+
+    function storeIncomingAttachment(data) {
+      if (!data || data.fromSelf) return null;
+      if (data.msgId) {
+        if (seenMsgIds.has(data.msgId)) return null;
+        seenMsgIds.add(data.msgId);
+      }
+      const targetChatId = resolveIncomingChatId(data);
+      if (!targetChatId || (socket && targetChatId === socket.id)) return null;
+
+      ensureChat(targetChatId, data.senderProfile || null, data.senderSessionToken || null);
+      const fullUserAttach = allOnlineUsers.find(
+        u => u.id === targetChatId || (data.senderSessionToken && u.sessionToken === data.senderSessionToken)
+      );
+      if (fullUserAttach && fullUserAttach.profile) {
+        chats[targetChatId].partnerProfile = fullUserAttach.profile;
+        if (fullUserAttach.sessionToken) chats[targetChatId].partnerSessionToken = fullUserAttach.sessionToken;
+      } else if (data.senderProfile) {
+        chats[targetChatId].partnerProfile = {
+          ...(chats[targetChatId].partnerProfile || {}),
+          ...data.senderProfile
+        };
+      }
+      if (data.senderSessionToken) chats[targetChatId].partnerSessionToken = data.senderSessionToken;
+
+      if (targetChatId !== activeChatId) {
+        chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
+      }
+      chats[targetChatId].consecutiveSent = 0;
+      chats[targetChatId].lastMessageTs = Date.now();
+      chats[targetChatId].messages.push({
+        attachment: data.attachment,
+        fromSelf: false,
+        time: data.time,
+        system: false,
+        msgId: data.msgId || null
+      });
+      saveSession();
+      return targetChatId;
+    }
+
+    function refreshActiveChatView() {
+      if (activeChatId && chats[activeChatId]) {
+        try { switchToChat(activeChatId); } catch (e) { /* ignore */ }
+      }
+      renderSidebarUsers();
+    }
+
+    /** @param {{ skipConfirm?: boolean }} [opts] */
+    function logOff(opts) {
+      const skipConfirm = opts && opts.skipConfirm;
+      if (!skipConfirm) {
+        if (!confirm('Log off? You will leave the online list and clear this device session.')) return;
+      }
 
       intentionalLogout = true;
+      allowHistoryLeave = true;
       // Drop local session first so reconnect / online-users cannot re-save us
       const myId = socket ? socket.id : null;
       const myToken = sessionToken;
@@ -1774,111 +1957,77 @@
       });
 
       socket.on('receive-message', (data) => {
-        // For sender (fromSelf true): the message belongs to the active chat
-        // For receiver (fromSelf false): belongs to the senderId
-        let targetChatId = data.fromSelf ? activeChatId : data.senderId;
-        // Prefer stable session token match if we already have a chat for that partner
-        if (!data.fromSelf && data.senderSessionToken) {
-          const byTok = Object.keys(chats).find(
-            id => chats[id] && chats[id].partnerSessionToken === data.senderSessionToken
-          );
-          if (byTok) targetChatId = byTok;
-        }
-        if (!targetChatId || (socket && targetChatId === socket.id)) return;
-
-        ensureChat(targetChatId, null, data.fromSelf ? null : data.senderSessionToken);
-
-        const fullUserMsg = allOnlineUsers.find(u => u.id === targetChatId || u.sessionToken === data.senderSessionToken);
-        if (fullUserMsg && fullUserMsg.profile) {
-          chats[targetChatId].partnerProfile = fullUserMsg.profile;
-          if (fullUserMsg.sessionToken) chats[targetChatId].partnerSessionToken = fullUserMsg.sessionToken;
-        }
-
-        const isIncoming = !data.fromSelf;
-
-        // Store only incoming messages (sender already stored manually for instant)
-        if (isIncoming) {
-          chats[targetChatId].messages.push({
-            text: data.text,
-            fromSelf: !!data.fromSelf,
-            time: data.time,
-            system: false
-          });
-
-          chats[targetChatId].consecutiveSent = 0;
-
-          if (targetChatId !== activeChatId) {
-            chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
+        if (!data) return;
+        // Sender already stored message client-side for instant UI
+        if (data.fromSelf) {
+          if (activeChatId) {
+            const ind = document.getElementById('typing-indicator');
+            if (ind) ind.classList.add('hidden');
+            updateChatLimitStatus();
           }
+          return;
         }
 
-        chats[targetChatId].lastMessageTs = Date.now();
-        saveSession();
+        const targetChatId = storeIncomingMessage(data);
+        if (!targetChatId) return;
+
         renderSidebarUsers();
 
-        // Render live only for the active chat
+        // Live paint if this chat is open; otherwise unread badge only
         if (targetChatId === activeChatId) {
-          // For sender's echo: we already appended manually above, so skip append here
-          if (isIncoming) {
-            addMessageToChatEl(data.text, !!data.fromSelf, data.time);
-          }
+          addMessageToChatEl(data.text, false, data.time);
           const ind = document.getElementById('typing-indicator');
           if (ind) ind.classList.add('hidden');
-        }
-        if (targetChatId === activeChatId) {
           updateChatLimitStatus();
         }
       });
 
       socket.on('receive-attachment', (data) => {
-        // Same routing as text messages: own echo uses active chat; incoming uses senderId
-        const targetChatId = data.fromSelf ? activeChatId : data.senderId;
-        if (!targetChatId || (socket && targetChatId === socket.id)) return;
-
-        ensureChat(targetChatId);
-
-        // Enrich with full profile from online list if available
-        const fullUserAttach = allOnlineUsers.find(u => u.id === targetChatId);
-        if (fullUserAttach && fullUserAttach.profile) {
-          chats[targetChatId].partnerProfile = fullUserAttach.profile;
+        if (!data) return;
+        if (data.fromSelf) {
+          if (activeChatId) {
+            const ind = document.getElementById('typing-indicator');
+            if (ind) ind.classList.add('hidden');
+            updateChatLimitStatus();
+          }
+          return;
         }
 
-        const isIncoming = !data.fromSelf;
-
-        if (isIncoming && targetChatId !== activeChatId) {
-          chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
-        }
-
-        if (isIncoming) {
-          // Reset spam counter when other responds
-          chats[targetChatId].consecutiveSent = 0;
-        }
-
-        // Bump recency
-        chats[targetChatId].lastMessageTs = Date.now();
-
-        const attachMsg = {
-          attachment: data.attachment,
-          fromSelf: !!data.fromSelf,
-          time: data.time,
-          system: false
-        };
-
-        // Sender already stored attachment client-side for instant UI
-        if (isIncoming) {
-          chats[targetChatId].messages.push(attachMsg);
-        }
+        const targetChatId = storeIncomingAttachment(data);
+        if (!targetChatId) return;
 
         renderSidebarUsers();
 
         if (targetChatId === activeChatId) {
-          if (isIncoming) {
-            renderAttachmentInChat(data.attachment, false, data.time);
-          }
+          renderAttachmentInChat(data.attachment, false, data.time);
           const ind = document.getElementById('typing-indicator');
           if (ind) ind.classList.add('hidden');
           updateChatLimitStatus();
         }
+      });
+
+      // Batch of messages queued while we were away (2‑min grace)
+      socket.on('pending-sync', (payload) => {
+        if (!payload || intentionalLogout) return;
+        const msgs = Array.isArray(payload.messages) ? payload.messages : [];
+        const atts = Array.isArray(payload.attachments) ? payload.attachments : [];
+        let any = false;
+        msgs.forEach(m => {
+          if (storeIncomingMessage(m)) any = true;
+        });
+        atts.forEach(a => {
+          if (storeIncomingAttachment(a)) any = true;
+        });
+        if (any) {
+          console.log('[PineappleChat] Applied pending-sync', msgs.length, 'messages,', atts.length, 'attachments');
+          refreshActiveChatView();
+        }
+      });
+
+      // Soft delivery notice (queued for away peer) — no blocking alert
+      socket.on('delivery-status', (info) => {
+        if (!info || !info.message) return;
+        console.log('[PineappleChat]', info.message);
       });
 
       socket.on('chat-left', (data) => {
@@ -2354,7 +2503,27 @@
       const currentSocketId = socket ? socket.id : null;
       const { gender, minAge, maxAge } = currentFilters;
 
-      let filtered = allOnlineUsers.filter(user => {
+      // Merge online list with any local chats that have unread/history but id not yet remapped
+      const byId = new Map();
+      allOnlineUsers.forEach(u => { if (u && u.id) byId.set(u.id, u); });
+      Object.keys(chats).forEach(cid => {
+        if (!cid || cid === currentSocketId) return;
+        if (byId.has(cid)) return;
+        const c = chats[cid];
+        if (!c || !c.partnerProfile) return;
+        // Surface chats with messages (e.g. pending delivered before online list remap)
+        if ((c.messages && c.messages.length) || (c.unread || 0) > 0) {
+          byId.set(cid, {
+            id: cid,
+            sessionToken: c.partnerSessionToken || null,
+            profile: c.partnerProfile,
+            away: true
+          });
+        }
+      });
+      const listForSidebar = Array.from(byId.values());
+
+      let filtered = listForSidebar.filter(user => {
         if (!user || !user.profile || user.id === currentSocketId) return false;
         if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
         const p = user.profile;
@@ -2973,6 +3142,7 @@
 
           s.once('profile-accepted', (info) => {
             intentionalLogout = false;
+            allowHistoryLeave = false;
             if (info && info.sessionToken) {
               sessionToken = info.sessionToken;
               currentProfile.sessionToken = info.sessionToken;
@@ -2981,7 +3151,12 @@
             // Replace login UI completely with chat hub
             showScreen('hub');
             saveSession();
-            if (s && s.connected) s.emit('request-online-users');
+            if (s && s.connected) {
+              s.emit('request-online-users');
+              // Ask server to re-flush any messages queued while we were away
+              s.emit('request-pending');
+              setTimeout(() => { if (s.connected) s.emit('request-pending'); }, 500);
+            }
           });
 
           s.emit('set-profile', currentProfile);
@@ -3377,6 +3552,8 @@
         console.log('[PineappleChat] Restoring session (within 2 min grace)');
         const s = connectSocket();
         const onAccepted = (info) => {
+          intentionalLogout = false;
+          allowHistoryLeave = false;
           if (info && info.sessionToken) {
             sessionToken = info.sessionToken;
             currentProfile.sessionToken = info.sessionToken;
@@ -3386,7 +3563,16 @@
           if (activeChatId && chats[activeChatId]) {
             try { switchToChat(activeChatId); } catch (e) { /* ignore */ }
           }
-          if (s.connected) s.emit('request-online-users');
+          if (s.connected) {
+            s.emit('request-online-users');
+            // Deliver messages queued while this tab was away (within 2 min grace)
+            s.emit('request-pending');
+            setTimeout(() => {
+              if (s.connected) s.emit('request-pending');
+              refreshActiveChatView();
+            }, 500);
+            setTimeout(() => refreshActiveChatView(), 900);
+          }
         };
         s.once('profile-accepted', onAccepted);
         if (s.connected) {

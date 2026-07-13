@@ -84,20 +84,48 @@ function getSessionByToken(token) {
 
 function resolveLiveSocketForTarget(targetId) {
   // targetId may be current socket id OR a session token
+  if (!targetId) return { socket: null, session: null };
+
   let s = getLiveSocket(targetId);
   if (s) return { socket: s, session: getSessionBySocket(targetId) };
-  const sess = getSessionByToken(targetId);
-  if (sess && sess.socketId) {
-    s = getLiveSocket(sess.socketId);
-    if (s) return { socket: s, session: sess };
+
+  // By session token (may be live or in grace)
+  const byToken = getSessionByToken(targetId);
+  if (byToken) {
+    s = getLiveSocket(byToken.socketId);
+    return { socket: s, session: byToken };
   }
-  // Find session whose socketId matches targetId but briefly disconnected
-  for (const sess of sessions.values()) {
-    if (sess.socketId === targetId && getLiveSocket(sess.socketId)) {
-      return { socket: getLiveSocket(sess.socketId), session: sess };
+
+  // By last known socket id — include grace sessions (disconnected, still within 2 min)
+  for (const candidate of sessions.values()) {
+    if (candidate.socketId === targetId) {
+      s = getLiveSocket(candidate.socketId);
+      return { socket: s, session: candidate };
     }
   }
-  return { socket: null, session: sess || null };
+  return { socket: null, session: null };
+}
+
+function sessionTokenOf(sess) {
+  if (!sess) return null;
+  for (const [token, s] of sessions.entries()) {
+    if (s === sess) return token;
+  }
+  return null;
+}
+
+function isSessionInGrace(sess) {
+  if (!sess || !sess.disconnectedAt) return false;
+  return Date.now() - sess.disconnectedAt < SESSION_GRACE_MS;
+}
+
+/** Queue event for a session that is offline / in grace (max 80 items). */
+function queuePending(sess, entry) {
+  if (!sess) return false;
+  sess.pending = sess.pending || [];
+  sess.pending.push(entry);
+  while (sess.pending.length > 80) sess.pending.shift();
+  return true;
 }
 
 function getPartnerId(socketId) {
@@ -217,19 +245,42 @@ function broadcastStats() {
 }
 
 function flushPending(sess) {
-  if (!sess || !sess.pending || !sess.pending.length) return;
+  if (!sess || !sess.pending || !sess.pending.length) return 0;
   const sock = getLiveSocket(sess.socketId);
-  if (!sock) return;
+  if (!sock) return 0;
   const queue = sess.pending.splice(0, sess.pending.length);
+  // Deliver as a batch first (client can merge reliably), then individual events
+  // for backward compatibility with older clients.
+  const messages = [];
+  const attachments = [];
   for (const msg of queue) {
     if (msg.type === 'message') {
+      messages.push(msg.payload);
       sock.emit('receive-message', msg.payload);
     } else if (msg.type === 'attachment') {
+      attachments.push(msg.payload);
       sock.emit('receive-attachment', msg.payload);
     } else if (msg.type === 'chat-started') {
       sock.emit('chat-started', msg.payload);
     }
   }
+  if (messages.length || attachments.length) {
+    sock.emit('pending-sync', { messages, attachments, count: messages.length + attachments.length });
+  }
+  console.log(`[pending] flushed ${queue.length} item(s) to ${sess.profile && sess.profile.username}`);
+  return queue.length;
+}
+
+/** Deliver after client has finished set-profile handling (avoids race on refresh). */
+function flushPendingSoon(sess) {
+  if (!sess) return;
+  setTimeout(() => {
+    flushPending(sess);
+  }, 80);
+  // Second pass in case first socket rebind was mid-flight
+  setTimeout(() => {
+    flushPending(sess);
+  }, 400);
 }
 
 io.on('connection', (socket) => {
@@ -306,9 +357,25 @@ io.on('connection', (socket) => {
 
     const newUsername = (cleanedProfile.username || '').trim().toLowerCase();
 
-    // Resume existing session within grace window
+    // Resume existing session within grace window (by token, else by username if away)
     let token = typeof cleanedProfile.sessionToken === 'string' ? cleanedProfile.sessionToken.trim() : '';
     let sess = token ? sessions.get(token) : null;
+
+    // If token missing/stale but same username is in grace, reclaim that session
+    // so queued messages from while they were away are not lost.
+    if (!sess && newUsername && newUsername !== 'anonymous') {
+      for (const [t, other] of sessions.entries()) {
+        const existing = (other.profile && other.profile.username || '').trim().toLowerCase();
+        if (existing !== newUsername) continue;
+        const otherLive = other.socketId && getLiveSocket(other.socketId);
+        if (!otherLive && isSessionInGrace(other)) {
+          sess = other;
+          token = t;
+          console.log(`[session] reclaimed grace session for ${cleanedProfile.username} via username`);
+          break;
+        }
+      }
+    }
 
     // Unique username among *other* live/grace sessions
     if (newUsername && newUsername !== 'anonymous') {
@@ -318,8 +385,7 @@ io.on('connection', (socket) => {
         if (existing === newUsername) {
           // Same session reconnecting is OK; different session takes the name → error
           const otherLive = other.socketId && getLiveSocket(other.socketId);
-          const otherGrace =
-            other.disconnectedAt && Date.now() - other.disconnectedAt < SESSION_GRACE_MS;
+          const otherGrace = isSessionInGrace(other);
           if (otherLive || otherGrace) {
             socket.emit('profile-error', {
               field: 'username',
@@ -348,10 +414,13 @@ io.on('connection', (socket) => {
           blockedUsers.delete(sess.socketId);
         }
       }
+      // Preserve any pending messages queued while away
+      if (!Array.isArray(sess.pending)) sess.pending = [];
       sess.socketId = socket.id;
       sess.disconnectedAt = null;
       sess.profile = cleanedProfile;
       sess.profile.sessionToken = token;
+      sessions.set(token, sess);
     } else {
       token = newSessionToken();
       sess = {
@@ -374,10 +443,12 @@ io.on('connection', (socket) => {
     socket.emit('profile-accepted', {
       id: socket.id,
       sessionToken: token,
-      sessionGraceMs: SESSION_GRACE_MS
+      sessionGraceMs: SESSION_GRACE_MS,
+      pendingCount: (sess.pending && sess.pending.length) || 0
     });
 
-    flushPending(sess);
+    // Deliver queued messages after client finishes profile-accepted / hub restore
+    flushPendingSoon(sess);
 
     const list = buildOnlineList();
     socket.emit('online-users', list);
@@ -401,15 +472,15 @@ io.on('connection', (socket) => {
       const awaySess =
         getSessionByToken(targetId) ||
         [...sessions.values()].find((s) => s.socketId === targetId);
-      if (awaySess && awaySess.disconnectedAt) {
+      if (awaySess && isSessionInGrace(awaySess)) {
         const myProfile = socket.profile;
+        const awayToken = sessionTokenOf(awaySess);
         socket.emit('chat-started', {
           partnerId: awaySess.socketId || targetId,
           partnerProfile: awaySess.profile,
-          partnerSessionToken: [...sessions.entries()].find(([, s]) => s === awaySess)?.[0]
+          partnerSessionToken: awayToken
         });
-        awaySess.pending = awaySess.pending || [];
-        awaySess.pending.push({
+        queuePending(awaySess, {
           type: 'chat-started',
           payload: {
             partnerId: socket.id,
@@ -458,16 +529,43 @@ io.on('connection', (socket) => {
       return;
     }
     const clean = check.text;
+    const msgId = crypto.randomBytes(8).toString('hex');
     const payload = {
+      msgId,
       text: clean,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id,
-      senderSessionToken: socket.sessionToken
+      senderSessionToken: socket.sessionToken,
+      senderProfile: socket.profile
+        ? {
+            username: socket.profile.username,
+            age: socket.profile.age,
+            gender: socket.profile.gender,
+            country: socket.profile.country,
+            city: socket.profile.city,
+            location: socket.profile.location,
+            image: socket.profile.image,
+            whatsOnMind: socket.profile.whatsOnMind
+          }
+        : null
     };
 
     if (isBlocked(socket.id, targetId)) return;
 
     const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+
+    // Always queue when target is in grace (even if a zombie socket still looks "connected")
+    if (targetSess && isSessionInGrace(targetSess)) {
+      queuePending(targetSess, { type: 'message', payload: { ...payload, fromSelf: false } });
+      socket.emit('receive-message', { ...payload, fromSelf: true });
+      // Soft notice once-style (non-blocking for sender UI)
+      socket.emit('delivery-status', {
+        targetId,
+        queued: true,
+        message: 'User is reconnecting — message will be delivered when they are back (within 2 min).'
+      });
+      return;
+    }
 
     if (targetSocket) {
       targetSocket.emit('receive-message', { ...payload, fromSelf: false });
@@ -476,17 +574,12 @@ io.on('connection', (socket) => {
     }
 
     // Target temporarily disconnected within grace — queue message
-    const awaySess =
-      targetSess ||
-      getSessionByToken(targetId) ||
-      [...sessions.values()].find((s) => s.socketId === targetId);
-
-    if (awaySess && awaySess.disconnectedAt && Date.now() - awaySess.disconnectedAt < SESSION_GRACE_MS) {
-      awaySess.pending = awaySess.pending || [];
-      awaySess.pending.push({ type: 'message', payload: { ...payload, fromSelf: false } });
-      if (awaySess.pending.length > 50) awaySess.pending.shift();
+    if (targetSess && isSessionInGrace(targetSess)) {
+      queuePending(targetSess, { type: 'message', payload: { ...payload, fromSelf: false } });
       socket.emit('receive-message', { ...payload, fromSelf: true });
-      socket.emit('chat-error', {
+      socket.emit('delivery-status', {
+        targetId,
+        queued: true,
         message: 'User is reconnecting — message will be delivered when they are back (within 2 min).'
       });
       return;
@@ -508,33 +601,53 @@ io.on('connection', (socket) => {
     }
 
     const payload = {
+      msgId: crypto.randomBytes(8).toString('hex'),
       attachment,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id,
-      senderSessionToken: socket.sessionToken
+      senderSessionToken: socket.sessionToken,
+      senderProfile: socket.profile
+        ? {
+            username: socket.profile.username,
+            age: socket.profile.age,
+            gender: socket.profile.gender,
+            country: socket.profile.country,
+            city: socket.profile.city,
+            location: socket.profile.location,
+            image: socket.profile.image,
+            whatsOnMind: socket.profile.whatsOnMind
+          }
+        : null
     };
 
     const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+
+    if (targetSess && isSessionInGrace(targetSess)) {
+      queuePending(targetSess, { type: 'attachment', payload: { ...payload, fromSelf: false } });
+      socket.emit('receive-attachment', { ...payload, fromSelf: true });
+      return;
+    }
+
     if (targetSocket) {
       targetSocket.emit('receive-attachment', { ...payload, fromSelf: false });
       socket.emit('receive-attachment', { ...payload, fromSelf: true });
       return;
     }
 
-    const awaySess =
-      targetSess ||
-      getSessionByToken(targetId) ||
-      [...sessions.values()].find((s) => s.socketId === targetId);
-
-    if (awaySess && awaySess.disconnectedAt && Date.now() - awaySess.disconnectedAt < SESSION_GRACE_MS) {
-      awaySess.pending = awaySess.pending || [];
-      awaySess.pending.push({ type: 'attachment', payload: { ...payload, fromSelf: false } });
-      if (awaySess.pending.length > 20) awaySess.pending.shift();
+    if (targetSess && isSessionInGrace(targetSess)) {
+      queuePending(targetSess, { type: 'attachment', payload: { ...payload, fromSelf: false } });
       socket.emit('receive-attachment', { ...payload, fromSelf: true });
       return;
     }
 
     socket.emit('chat-error', { message: 'Attachment not delivered — that user is offline.' });
+  });
+
+  // Client asks to re-flush any remaining pending after hub UI is ready
+  socket.on('request-pending', () => {
+    const token = resolveSessionTokenForSocket(socket);
+    const sess = token ? sessions.get(token) : null;
+    if (sess) flushPending(sess);
   });
 
   socket.on('next-stranger', () => {
