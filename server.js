@@ -20,7 +20,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
 /** Keep user on the online list & allow seamless rejoin for this long after disconnect */
-const SESSION_GRACE_MS = 2 * 60 * 1000;
+const SESSION_GRACE_MS = 15 * 60 * 1000;
 
 app.get('/api/config', (req, res) => {
   res.json({
@@ -96,7 +96,7 @@ function resolveLiveSocketForTarget(targetId) {
     return { socket: s, session: byToken };
   }
 
-  // By last known socket id — include grace sessions (disconnected, still within 2 min)
+  // By last known socket id — include grace sessions (disconnected, still within grace window)
   for (const candidate of sessions.values()) {
     if (candidate.socketId === targetId) {
       s = getLiveSocket(candidate.socketId);
@@ -179,7 +179,7 @@ function resolveSessionTokenForSocket(socket) {
   return token && sessions.has(token) ? token : null;
 }
 
-/** Permanently remove presence for a socket (log off). No 2‑min grace. */
+/** Permanently remove presence for a socket (log off). No grace period. */
 function forceLogoutSocket(socket, reason) {
   const token = resolveSessionTokenForSocket(socket);
   let removed = null;
@@ -562,7 +562,7 @@ io.on('connection', (socket) => {
       socket.emit('delivery-status', {
         targetId,
         queued: true,
-        message: 'User is reconnecting — message will be delivered when they are back (within 2 min).'
+        message: 'User is reconnecting — message will be delivered when they are back (within 15 min).'
       });
       return;
     }
@@ -580,7 +580,7 @@ io.on('connection', (socket) => {
       socket.emit('delivery-status', {
         targetId,
         queued: true,
-        message: 'User is reconnecting — message will be delivered when they are back (within 2 min).'
+        message: 'User is reconnecting — message will be delivered when they are back (within 15 min).'
       });
       return;
     }
@@ -684,14 +684,14 @@ io.on('connection', (socket) => {
     socket.emit('chat-left', { by: socket.id, partnerId: targetId, blocked: true });
   });
 
-  // Explicit log off — remove immediately (no 2‑minute grace)
+  // Explicit log off — remove immediately (no grace period)
   socket.on('logout', (ack) => {
     const partnerId = getPartnerId(socket.id);
     const removed = forceLogoutSocket(socket, 'logout');
     const name = removed && removed.profile && removed.profile.username;
     console.log(`[logout] ${name || socket.id} (removed=${!!removed})`);
 
-    // Tell active chat partner this leave is permanent (not the 2‑min grace)
+    // Tell active chat partner this leave is permanent (not temporary grace)
     if (partnerId) {
       const partner = getLiveSocket(partnerId);
       if (partner) {

@@ -1365,9 +1365,9 @@
       if (typeof updateLogoutButtonVisibility === 'function') updateLogoutButtonVisibility();
     }
 
-    // ---- Session restore (2 minutes) ----
+    // ---- Session restore (15 minutes; synced from server /api/config when available) ----
     const SESSION_KEY = 'pineapplechat-session';
-    const SESSION_GRACE_MS = 2 * 60 * 1000;
+    let SESSION_GRACE_MS = 15 * 60 * 1000;
     let sessionToken = null;
     /** Set true after intentional Log off so reconnect never re-registers the old profile. */
     let intentionalLogout = false;
@@ -1642,7 +1642,7 @@
       clearSession();
       currentProfile = null;
 
-      // Tell server to remove immediately (no 2‑min grace). Prefer ack when available.
+      // Tell server to remove immediately (no grace period). Prefer ack when available.
       if (socket && socket.connected) {
         let settled = false;
         const finish = () => {
@@ -1835,7 +1835,7 @@
 
       socket.on('connect', () => {
         console.log('%c[client] Connected', 'color:#64748b', socket.id);
-        // Re-register within 2 min grace — new socket id, same sessionToken
+        // Re-register within grace window — new socket id, same sessionToken
         // Never re-register after intentional Log off
         if (currentProfile && !intentionalLogout) {
           if (sessionToken) currentProfile.sessionToken = sessionToken;
@@ -1847,7 +1847,7 @@
       socket.on('disconnect', (reason) => {
         console.log('%c[client] Disconnected', 'color:#b45309', reason);
         if (!intentionalLogout) {
-          saveSession(); // keep chat history for up to 2 minutes
+          saveSession(); // keep chat history for the grace window
         }
       });
 
@@ -2006,7 +2006,7 @@
         }
       });
 
-      // Batch of messages queued while we were away (2‑min grace)
+      // Batch of messages queued while we were away (grace window)
       socket.on('pending-sync', (payload) => {
         if (!payload || intentionalLogout) return;
         const msgs = Array.isArray(payload.messages) ? payload.messages : [];
@@ -3525,6 +3525,9 @@
         if (res.ok) {
           const cfg = await res.json();
           ENABLE_DEMO_USERS = !!cfg.enableDemoUsers;
+          if (cfg.sessionGraceMs && Number(cfg.sessionGraceMs) > 0) {
+            SESSION_GRACE_MS = Number(cfg.sessionGraceMs);
+          }
         }
       } catch (e) {
         ENABLE_DEMO_USERS = false;
@@ -3540,7 +3543,7 @@
       initUI();
       initLocationDropdowns(true);
 
-      // Restore session if refreshed within 2 minutes
+      // Restore session if refreshed within grace window (default 15 min)
       const saved = loadSession();
       if (saved && saved.profile) {
         currentProfile = saved.profile;
@@ -3549,7 +3552,7 @@
         chats = saved.chats && typeof saved.chats === 'object' ? saved.chats : {};
         activeChatId = saved.activeChatId || null;
         if (saved.currentFilters) currentFilters = saved.currentFilters;
-        console.log('[PineappleChat] Restoring session (within 2 min grace)');
+        console.log('[PineappleChat] Restoring session (within grace window,', SESSION_GRACE_MS / 60000, 'min)');
         const s = connectSocket();
         const onAccepted = (info) => {
           intentionalLogout = false;
@@ -3565,7 +3568,7 @@
           }
           if (s.connected) {
             s.emit('request-online-users');
-            // Deliver messages queued while this tab was away (within 2 min grace)
+            // Deliver messages queued while this tab was away (within grace window)
             s.emit('request-pending');
             setTimeout(() => {
               if (s.connected) s.emit('request-pending');
