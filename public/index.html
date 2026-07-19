@@ -1459,20 +1459,52 @@
       city: ''
     };
 
-    // Avatar presets — DiceBear generates the image from seed, so label always matches the picture
-    // Format: style + seed → unique cartoon-style avatar (not random stock photos)
-    // Cute themed avatars (DiceBear seeds = stable, fun characters)
+    // Avatar presets — 4 male, 4 female, 2 unisex cartoons (single grid, no category UI).
+    // Use styles + gender params that read clearly as male/female (adventurer / lorelei / avataaars).
     const AVATAR_PRESETS = [
-      { id: 'mochi',     label: 'Mochi',     url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=MochiPuff&size=128' },
-      { id: 'bubbles',   label: 'Bubbles',   url: 'https://api.dicebear.com/9.x/lorelei/png?seed=BubblesPop&size=128' },
-      { id: 'pocky',     label: 'Pocky',     url: 'https://api.dicebear.com/9.x/adventurer/png?seed=PockyBean&size=128' },
-      { id: 'nori',      label: 'Nori',      url: 'https://api.dicebear.com/9.x/big-smile/png?seed=NoriSushi&size=128' },
-      { id: 'kiwi',      label: 'Kiwi',      url: 'https://api.dicebear.com/9.x/avataaars/png?seed=KiwiCutie&size=128' },
-      { id: 'pebbles',   label: 'Pebbles',   url: 'https://api.dicebear.com/9.x/pixel-art/png?seed=PebblesPix&size=128' },
-      { id: 'coco',      label: 'Coco',      url: 'https://api.dicebear.com/9.x/notionists/png?seed=CocoBean&size=128' },
-      { id: 'lulu',      label: 'Lulu',      url: 'https://api.dicebear.com/9.x/personas/png?seed=LuluCloud&size=128' },
-      { id: 'boba',      label: 'Boba',      url: 'https://api.dicebear.com/9.x/bottts/png?seed=BobaBot&size=128' },
-      { id: 'cupcake',   label: 'Cupcake',   url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=CupcakeHug&size=128' }
+      // Male (clear masculine presentation)
+      {
+        id: 'kai', label: 'Kai',
+        url: 'https://api.dicebear.com/9.x/adventurer/png?seed=James&gender=male&size=128&backgroundColor=b6e3f4'
+      },
+      {
+        id: 'leo', label: 'Leo',
+        url: 'https://api.dicebear.com/9.x/avataaars/png?seed=Marcus&gender=male&facialHairProbability=100&facialHair=beardLight&size=128&backgroundColor=c0aede'
+      },
+      {
+        id: 'noah', label: 'Noah',
+        url: 'https://api.dicebear.com/9.x/adventurer/png?seed=Daniel&gender=male&size=128&backgroundColor=d1d4f9'
+      },
+      {
+        id: 'rex', label: 'Rex',
+        url: 'https://api.dicebear.com/9.x/avataaars/png?seed=Ryan&gender=male&facialHairProbability=100&facialHair=beardMedium&top=shortFlat&size=128&backgroundColor=b6e3f4'
+      },
+      // Female (clear feminine presentation)
+      {
+        id: 'luna', label: 'Luna',
+        url: 'https://api.dicebear.com/9.x/lorelei/png?seed=Sophia&gender=female&size=128&backgroundColor=ffdfbf'
+      },
+      {
+        id: 'aria', label: 'Aria',
+        url: 'https://api.dicebear.com/9.x/lorelei/png?seed=Emma&gender=female&size=128&backgroundColor=ffd5dc'
+      },
+      {
+        id: 'mia', label: 'Mia',
+        url: 'https://api.dicebear.com/9.x/avataaars/png?seed=Olivia&gender=female&top=longStraight&size=128&backgroundColor=c0aede'
+      },
+      {
+        id: 'zara', label: 'Zara',
+        url: 'https://api.dicebear.com/9.x/adventurer/png?seed=Isabella&gender=female&size=128&backgroundColor=ffdfbf'
+      },
+      // Unisex cartoons
+      {
+        id: 'pixelpop', label: 'PixelPop',
+        url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=PixelPopCute&size=128&backgroundColor=d1d4f9'
+      },
+      {
+        id: 'starbot', label: 'StarBot',
+        url: 'https://api.dicebear.com/9.x/bottts-neutral/png?seed=StarBotGlow&size=128&backgroundColor=c0aede'
+      }
     ];
 
     // Demo users: OFF for production (Render). Local only if ENABLE_DEMO_USERS=true on server.
@@ -1487,7 +1519,7 @@
           country: 'United States',
           city: 'New York',
           location: 'New York, United States',
-          image: 'https://api.dicebear.com/9.x/adventurer/png?seed=PockyBean&size=128',
+          image: 'https://api.dicebear.com/9.x/adventurer/png?seed=James&gender=male&size=128&backgroundColor=b6e3f4',
           whatsOnMind: 'Looking for chill chats!',
           preference: 'anyone'
         }
@@ -1495,14 +1527,14 @@
       {
         id: 'demo-goku',
         profile: {
-          username: 'Mochi',
-          gender: 'male',
+          username: 'Luna',
+          gender: 'female',
           age: 28,
           country: 'Japan',
           city: 'Tokyo',
           location: 'Tokyo, Japan',
-          image: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=MochiPuff&size=128',
-          whatsOnMind: 'Soft vibes only 🍡',
+          image: 'https://api.dicebear.com/9.x/lorelei/png?seed=Sophia&gender=female&size=128&backgroundColor=ffdfbf',
+          whatsOnMind: 'Soft vibes only ✨',
           preference: 'anyone'
         }
       }
@@ -3934,7 +3966,7 @@
       const grid = document.getElementById('avatar-preset-grid');
       if (!grid) return;
       grid.innerHTML = '';
-      AVATAR_PRESETS.forEach((preset, i) => {
+      AVATAR_PRESETS.forEach((preset) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'avatar-preset-btn flex flex-col items-center gap-0.5 p-1 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 hover:border-blue-400 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400';
