@@ -6,6 +6,8 @@ const fs = require('fs');
 const vm = require('vm');
 const crypto = require('crypto');
 const safety = require(path.join(__dirname, 'public', 'content-safety.js'));
+const accounts = require(path.join(__dirname, 'server-accounts.js'));
+const features = require(path.join(__dirname, 'server-features.js'));
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +18,7 @@ const io = new Server(server, {
   pingInterval: 25000
 });
 
+app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
@@ -27,8 +30,27 @@ app.get('/api/config', (req, res) => {
     enableDemoUsers: ENABLE_DEMO_USERS,
     appName: 'PineappleChat',
     minAge: safety.MIN_AGE || 18,
-    sessionGraceMs: SESSION_GRACE_MS
+    sessionGraceMs: SESSION_GRACE_MS,
+    emailConfigured: accounts.emailConfigured(),
+    features: {
+      block: true,
+      friends: true,
+      reply: true,
+      reactions: true,
+      readReceipts: true,
+      mute: true,
+      voiceNotes: true,
+      report: true,
+      invite: true,
+      interests: true
+    }
   });
+});
+
+app.get('/api/invite/:code', (req, res) => {
+  const inv = features.getInvite(req.params.code);
+  if (!inv) return res.status(404).json({ ok: false, message: 'Invite not found or expired.' });
+  res.json({ ok: true, username: inv.username, code: req.params.code });
 });
 
 function loadWorldLocations() {
@@ -61,10 +83,62 @@ const sessions = new Map();
 // socketId -> token
 const socketToSession = new Map();
 const pairs = new Map(); // socketId -> partnerSocketId
-const blockedUsers = new Map(); // socketId -> Set
+/** socketId -> Set of blocked socketIds or session tokens */
+const blockedUsers = new Map();
+/** sessionToken -> Set of blocked sessionTokens (survives reconnect) */
+const blockedBySession = new Map();
 
 function newSessionToken() {
   return crypto.randomBytes(16).toString('hex');
+}
+
+function getBlockedSetForSocket(socketId) {
+  if (!blockedUsers.has(socketId)) blockedUsers.set(socketId, new Set());
+  return blockedUsers.get(socketId);
+}
+
+function getBlockedSetForSession(token) {
+  if (!token) return null;
+  if (!blockedBySession.has(token)) blockedBySession.set(token, new Set());
+  return blockedBySession.get(token);
+}
+
+function blockPair(blockerSocketId, blockerToken, targetId, targetToken) {
+  const setA = getBlockedSetForSocket(blockerSocketId);
+  if (targetId) setA.add(targetId);
+  if (targetToken) setA.add(targetToken);
+
+  if (blockerToken) {
+    const sSet = getBlockedSetForSession(blockerToken);
+    if (targetToken) sSet.add(targetToken);
+    if (targetId) sSet.add(targetId);
+  }
+}
+
+function isBlockedBetween(idOrTokenA, idOrTokenB, tokenA, tokenB) {
+  // Legacy socket-id map
+  if (idOrTokenA && idOrTokenB) {
+    const a = blockedUsers.get(idOrTokenA);
+    if (a && (a.has(idOrTokenB) || (tokenB && a.has(tokenB)))) return true;
+    const b = blockedUsers.get(idOrTokenB);
+    if (b && (b.has(idOrTokenA) || (tokenA && b.has(tokenA)))) return true;
+  }
+  // Session-token map (reconnect-safe)
+  if (tokenA && tokenB) {
+    const sa = blockedBySession.get(tokenA);
+    if (sa && sa.has(tokenB)) return true;
+    const sb = blockedBySession.get(tokenB);
+    if (sb && sb.has(tokenA)) return true;
+  }
+  if (tokenA && idOrTokenB) {
+    const sa = blockedBySession.get(tokenA);
+    if (sa && sa.has(idOrTokenB)) return true;
+  }
+  if (tokenB && idOrTokenA) {
+    const sb = blockedBySession.get(tokenB);
+    if (sb && sb.has(idOrTokenA)) return true;
+  }
+  return false;
 }
 
 function getLiveSocket(socketId) {
@@ -139,11 +213,16 @@ function unpair(socketId) {
 }
 
 function isBlocked(userA, userB) {
-  const blockedByA = blockedUsers.get(userA);
-  if (blockedByA && blockedByA.has(userB)) return true;
-  const blockedByB = blockedUsers.get(userB);
-  if (blockedByB && blockedByB.has(userA)) return true;
-  return false;
+  const tokenA = socketToSession.get(userA) || null;
+  const tokenB = socketToSession.get(userB) || null;
+  // Also resolve tokens if userA/B are already tokens
+  const ta = tokenA || (sessions.has(userA) ? userA : null);
+  const tb = tokenB || (sessions.has(userB) ? userB : null);
+  return isBlockedBetween(userA, userB, ta, tb);
+}
+
+function viewerBlocksTarget(viewerSocketId, viewerToken, targetSocketId, targetToken) {
+  return isBlockedBetween(viewerSocketId, targetSocketId, viewerToken, targetToken);
 }
 
 function clearGraceTimer(sess) {
@@ -184,12 +263,14 @@ function forceLogoutSocket(socket, reason) {
   const token = resolveSessionTokenForSocket(socket);
   let removed = null;
   if (token) {
+    accounts.unbindSession(token);
     removed = removeSession(token, reason || 'logout');
   }
   // Always clear socket-local state so reconnect without set-profile stays anonymous
   if (socket) {
     socket.profile = null;
     socket.sessionToken = null;
+    socket.accountEmail = null;
     socket.intentionalLogout = true;
     socketToSession.delete(socket.id);
   }
@@ -224,8 +305,24 @@ function buildOnlineList() {
   return list;
 }
 
+function buildOnlineListForViewer(viewerSocketId, viewerToken) {
+  const list = buildOnlineList();
+  if (!viewerSocketId && !viewerToken) return list;
+  return list.filter((u) => {
+    if (!u) return false;
+    if (viewerSocketId && u.id === viewerSocketId) return true; // keep self out client-side anyway
+    if (viewerToken && u.sessionToken === viewerToken) return true;
+    return !viewerBlocksTarget(viewerSocketId, viewerToken, u.id, u.sessionToken);
+  });
+}
+
 function broadcastOnlineUsers() {
-  io.emit('online-users', buildOnlineList());
+  // Per-viewer list so blocked users disappear for both sides
+  for (const sock of io.sockets.sockets.values()) {
+    if (!sock.connected) continue;
+    const token = resolveSessionTokenForSocket(sock);
+    sock.emit('online-users', buildOnlineListForViewer(sock.id, token));
+  }
 }
 
 function broadcastStats() {
@@ -262,6 +359,8 @@ function flushPending(sess) {
       sock.emit('receive-attachment', msg.payload);
     } else if (msg.type === 'chat-started') {
       sock.emit('chat-started', msg.payload);
+    } else if (msg.type === 'message-deleted') {
+      sock.emit('message-deleted', msg.payload);
     }
   }
   if (messages.length || attachments.length) {
@@ -286,11 +385,15 @@ function flushPendingSoon(sess) {
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
-  socket.emit('online-users', buildOnlineList());
+  {
+    const tok = resolveSessionTokenForSocket(socket);
+    socket.emit('online-users', buildOnlineListForViewer(socket.id, tok));
+  }
   broadcastStats();
 
   socket.on('request-online-users', () => {
-    socket.emit('online-users', buildOnlineList());
+    const tok = resolveSessionTokenForSocket(socket);
+    socket.emit('online-users', buildOnlineListForViewer(socket.id, tok));
     broadcastStats();
   });
 
@@ -353,6 +456,35 @@ io.on('connection', (socket) => {
         return;
       }
       cleanedProfile.whatsOnMind = mindCheck.text || '';
+    }
+
+    // Optional interests (max 5 short tags)
+    if (Array.isArray(cleanedProfile.interests)) {
+      const allowed = new Set([
+        'Friends', 'Dating', 'Chit Chat',
+        'Music', 'Movies', 'Sports', 'Gaming', 'Travel',
+        'Food', 'Tech', 'Art', 'Books', 'Fitness'
+      ]);
+      cleanedProfile.interests = cleanedProfile.interests
+        .map((t) => String(t || '').trim())
+        .filter((t) => allowed.has(t))
+        .slice(0, 5);
+    } else {
+      cleanedProfile.interests = [];
+    }
+
+    // Optional relationship status
+    const allowedStatus = new Set([
+      'single',
+      'in_a_relationship',
+      'married',
+      'divorced',
+      'separated'
+    ]);
+    if (cleanedProfile.relationshipStatus && allowedStatus.has(String(cleanedProfile.relationshipStatus))) {
+      cleanedProfile.relationshipStatus = String(cleanedProfile.relationshipStatus);
+    } else {
+      cleanedProfile.relationshipStatus = null;
     }
 
     const newUsername = (cleanedProfile.username || '').trim().toLowerCase();
@@ -450,11 +582,9 @@ io.on('connection', (socket) => {
     // Deliver queued messages after client finishes profile-accepted / hub restore
     flushPendingSoon(sess);
 
-    const list = buildOnlineList();
-    socket.emit('online-users', list);
-    io.emit('online-users', list);
+    broadcastOnlineUsers();
     broadcastStats();
-    console.log(`[profile] ${cleanedProfile.username} socket=${socket.id} token=${token.slice(0, 8)}… online=${list.length}`);
+    console.log(`[profile] ${cleanedProfile.username} socket=${socket.id} token=${token.slice(0, 8)}…`);
   });
 
   socket.on('start-chat-with', (data) => {
@@ -495,14 +625,16 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (isBlocked(socket.id, targetSocket.id)) {
+    const myTok = socket.sessionToken || socketToSession.get(socket.id);
+    const theirTok = socketToSession.get(targetSocket.id) || sessionTokenOf(targetSess);
+    if (isBlockedBetween(socket.id, targetSocket.id, myTok, theirTok)) {
       socket.emit('chat-error', { message: 'You have blocked this user or they have blocked you.' });
       return;
     }
 
     const myProfile = socket.profile;
     const theirProfile = targetSess.profile;
-    const theirToken = socketToSession.get(targetSocket.id);
+    const theirToken = theirTok;
 
     socket.emit('chat-started', {
       partnerId: targetSocket.id,
@@ -523,19 +655,43 @@ io.on('connection', (socket) => {
     const text = data && data.text;
     if (!targetId || typeof text !== 'string') return;
 
+    const rl = features.rateLimit('msg:' + socket.id, 40, 60 * 1000);
+    if (!rl.ok) {
+      socket.emit('chat-error', { message: rl.message });
+      return;
+    }
+
     const check = safety.validateChatText(text);
     if (!check.ok) {
       socket.emit('chat-error', { message: check.message || 'Message blocked by safety filters.' });
       return;
     }
     const clean = check.text;
-    const msgId = crypto.randomBytes(8).toString('hex');
+    // Prefer client msgId so sender & receiver share the same id (needed for reactions)
+    const clientMsgId = data.msgId != null ? String(data.msgId) : '';
+    const msgId =
+      clientMsgId && /^[a-zA-Z0-9_-]{8,40}$/.test(clientMsgId)
+        ? clientMsgId
+        : crypto.randomBytes(8).toString('hex');
+
+    // Optional reply-to quote (tap a message → reply)
+    let replyTo = null;
+    if (data.replyTo && typeof data.replyTo === 'object') {
+      const snippet = String(data.replyTo.text || '').slice(0, 160);
+      replyTo = {
+        msgId: data.replyTo.msgId || null,
+        text: snippet,
+        username: String(data.replyTo.username || 'User').slice(0, 40)
+      };
+    }
+
     const payload = {
       msgId,
       text: clean,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id,
       senderSessionToken: socket.sessionToken,
+      replyTo,
       senderProfile: socket.profile
         ? {
             username: socket.profile.username,
@@ -545,14 +701,19 @@ io.on('connection', (socket) => {
             city: socket.profile.city,
             location: socket.profile.location,
             image: socket.profile.image,
-            whatsOnMind: socket.profile.whatsOnMind
+            whatsOnMind: socket.profile.whatsOnMind,
+            interests: socket.profile.interests || [],
+            relationshipStatus: socket.profile.relationshipStatus || null
           }
         : null
     };
 
-    if (isBlocked(socket.id, targetId)) return;
+    // Track ownership for silent unsend/delete
+    features.registerMessageOwner(msgId, socket.sessionToken || socket.id);
 
     const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+    const targetTok = targetSess ? sessionTokenOf(targetSess) : null;
+    if (isBlockedBetween(socket.id, targetId, socket.sessionToken, targetTok)) return;
 
     // Always queue when target is in grace (even if a zombie socket still looks "connected")
     if (targetSess && isSessionInGrace(targetSess)) {
@@ -595,13 +756,22 @@ io.on('connection', (socket) => {
 
     if (isBlocked(socket.id, targetId)) return;
 
-    if (!attachment.type || (!attachment.type.startsWith('image/') && !attachment.type.startsWith('video/'))) {
-      socket.emit('chat-error', { message: 'Only image and video files are allowed.' });
+    if (
+      !attachment.type ||
+      (!attachment.type.startsWith('image/') &&
+        !attachment.type.startsWith('video/') &&
+        !attachment.type.startsWith('audio/'))
+    ) {
+      socket.emit('chat-error', { message: 'Only image, video, or audio files are allowed.' });
       return;
     }
 
+    const attMsgId =
+      data.msgId && /^[a-zA-Z0-9_-]{8,40}$/.test(String(data.msgId))
+        ? String(data.msgId)
+        : crypto.randomBytes(8).toString('hex');
     const payload = {
-      msgId: crypto.randomBytes(8).toString('hex'),
+      msgId: attMsgId,
       attachment,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id,
@@ -615,10 +785,14 @@ io.on('connection', (socket) => {
             city: socket.profile.city,
             location: socket.profile.location,
             image: socket.profile.image,
-            whatsOnMind: socket.profile.whatsOnMind
+            whatsOnMind: socket.profile.whatsOnMind,
+            interests: socket.profile.interests || [],
+            relationshipStatus: socket.profile.relationshipStatus || null
           }
         : null
     };
+
+    features.registerMessageOwner(attMsgId, socket.sessionToken || socket.id);
 
     const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
 
@@ -674,15 +848,296 @@ io.on('connection', (socket) => {
     const targetId = data && data.targetId;
     if (!targetId) return;
 
-    if (!blockedUsers.has(socket.id)) blockedUsers.set(socket.id, new Set());
-    blockedUsers.get(socket.id).add(targetId);
+    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+    const myToken = socket.sessionToken || socketToSession.get(socket.id);
+    const theirToken = targetSess ? sessionTokenOf(targetSess) : (data.targetSessionToken || null);
 
-    const { socket: targetSocket } = resolveLiveSocketForTarget(targetId);
+    blockPair(socket.id, myToken, targetId, theirToken);
+    // Mutual block effect for messaging: also mark reverse socket-level if live
     if (targetSocket) {
+      blockPair(targetSocket.id, theirToken, socket.id, myToken);
       targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id, blocked: true });
+      targetSocket.emit('you-were-blocked', { by: socket.id });
     }
+
     socket.emit('chat-left', { by: socket.id, partnerId: targetId, blocked: true });
+    socket.emit('block-ok', {
+      targetId,
+      targetSessionToken: theirToken,
+      message: 'User blocked. You will not see or message each other.'
+    });
+    broadcastOnlineUsers();
   });
+
+  // ---- Email account + friends ----
+  socket.on('account-register', async (data, ack) => {
+    const rl = features.rateLimit('reg:' + (socket.handshake.address || socket.id), 8, 15 * 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const result = await accounts.register(data && data.email, data && data.password);
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('account-result', { action: 'register', ...result });
+  });
+
+  socket.on('account-verify', (data, ack) => {
+    const result = accounts.verify(data && data.email, data && data.code);
+    if (result.ok) {
+      const token = socket.sessionToken || socketToSession.get(socket.id);
+      if (token) accounts.bindSession(token, data.email);
+      socket.accountEmail = String(data.email || '').trim().toLowerCase();
+    }
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('account-result', { action: 'verify', ...result });
+  });
+
+  socket.on('account-login', async (data, ack) => {
+    const rl = features.rateLimit('login:' + (socket.handshake.address || socket.id), 20, 15 * 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const result = await accounts.login(data && data.email, data && data.password);
+    if (result.ok) {
+      const token = socket.sessionToken || socketToSession.get(socket.id);
+      if (token) accounts.bindSession(token, data.email);
+      socket.accountEmail = String(data.email || '').trim().toLowerCase();
+    }
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('account-result', { action: 'login', ...result });
+  });
+
+  socket.on('account-resend-code', async (data, ack) => {
+    const result = await accounts.resendCode(data && data.email);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-status', (ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const acc = accounts.getAccountForSession(token);
+    const payload = {
+      ok: !!acc,
+      account: acc ? accounts.publicAccount(acc) : null,
+      emailConfigured: accounts.emailConfigured()
+    };
+    if (typeof ack === 'function') ack(payload);
+    else socket.emit('account-status', payload);
+  });
+
+  socket.on('friend-add', (data, ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const targetId = data && (data.targetId || data.targetSessionToken);
+    const result = accounts.addFriend(token, targetId, (idOrTok) => {
+      const { session: tSess } = resolveLiveSocketForTarget(idOrTok);
+      if (!tSess) {
+        const s = getSessionByToken(idOrTok);
+        if (s) {
+          const t = sessionTokenOf(s);
+          return accounts.getEmailForSession(t);
+        }
+        return null;
+      }
+      const t = sessionTokenOf(tSess);
+      return accounts.getEmailForSession(t);
+    });
+    if (result.ok && result.targetEmail) {
+      for (const sock of io.sockets.sockets.values()) {
+        if (!sock.connected) continue;
+        const t = sock.sessionToken || socketToSession.get(sock.id);
+        if (accounts.getEmailForSession(t) === result.targetEmail) {
+          sock.emit('friend-added', {
+            email: accounts.getEmailForSession(token),
+            message: 'Someone added you as a friend.'
+          });
+        }
+      }
+    }
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('friend-result', result);
+  });
+
+  function friendPresenceForEmail(email) {
+    const tok = accounts.findSessionTokenForEmail(email);
+    if (!tok) return null;
+    const sess = getSessionByToken(tok);
+    if (!sess) return null;
+    const live = sess.socketId && getLiveSocket(sess.socketId);
+    const away = !live && isSessionInGrace(sess);
+    if (!live && !away) return null;
+    return {
+      online: !!live,
+      away: !!away,
+      username: (sess.profile && sess.profile.username) || null,
+      sessionToken: tok,
+      socketId: sess.socketId || null
+    };
+  }
+
+  socket.on('friend-list', (ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const result = accounts.listFriendsWithPresence(token, friendPresenceForEmail);
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('friend-list', result);
+  });
+
+  // ---- Report ----
+  socket.on('report-user', (data, ack) => {
+    const rl = features.rateLimit('report:' + socket.id, 10, 60 * 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const targetId = data && data.targetId;
+    const { session: tSess } = resolveLiveSocketForTarget(targetId);
+    const result = features.addReport({
+      reporterId: socket.id,
+      reporterToken: socket.sessionToken,
+      reporterName: socket.profile && socket.profile.username,
+      targetId,
+      targetToken: tSess ? sessionTokenOf(tSess) : (data && data.targetSessionToken),
+      targetName: (tSess && tSess.profile && tSess.profile.username) || (data && data.targetName),
+      reason: data && data.reason,
+      details: data && data.details
+    });
+    if (typeof ack === 'function') ack(result);
+  });
+
+  // ---- Silent delete (unsend) — no tombstone / no trail for the other user ----
+  socket.on('delete-message', (data, ack) => {
+    const msgId = data && data.msgId ? String(data.msgId) : '';
+    const targetId = data && data.targetId;
+    const targetSessionToken = data && data.targetSessionToken;
+    if (!msgId) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Missing message id.' });
+      return;
+    }
+    const ownerKey = socket.sessionToken || socket.id;
+    const allowed =
+      features.allowSilentDelete(msgId, ownerKey) ||
+      features.allowSilentDelete(msgId, socket.id);
+
+    if (!allowed) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'You can only delete your own messages.' });
+      return;
+    }
+
+    features.forgetMessage(msgId);
+
+    // Minimal payload only — never a "message deleted" placeholder for the peer
+    const payload = { msgId };
+    socket.emit('message-deleted', payload);
+
+    let targetSocket = resolveLiveSocketForTarget(targetId).socket;
+    if (!targetSocket && targetSessionToken) {
+      targetSocket = resolveLiveSocketForTarget(targetSessionToken).socket;
+    }
+    if (targetSocket && targetSocket.id !== socket.id) {
+      targetSocket.emit('message-deleted', payload);
+    }
+
+    const { session: tSess } = resolveLiveSocketForTarget(targetId || targetSessionToken);
+    if (tSess && isSessionInGrace(tSess) && (!targetSocket || !targetSocket.connected)) {
+      queuePending(tSess, { type: 'message-deleted', payload });
+    }
+
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  // ---- Reactions ----
+  socket.on('message-react', (data, ack) => {
+    const msgId = data && data.msgId;
+    const emoji = data && data.emoji;
+    const targetId = data && data.targetId;
+    const targetSessionToken = data && data.targetSessionToken;
+    if (!msgId || !emoji) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Missing message or emoji.' });
+      return;
+    }
+    const reactorKey = socket.sessionToken || socket.id;
+    const result = features.toggleReaction(msgId, emoji, reactorKey);
+    if (!result.ok) {
+      if (typeof ack === 'function') ack(result);
+      return;
+    }
+    const payload = {
+      msgId,
+      reactions: result.snapshot,
+      by: socket.id,
+      byToken: socket.sessionToken
+    };
+    // Always confirm to reactor
+    socket.emit('message-reactions', payload);
+    // Deliver to chat partner (try socket id, then session token)
+    let targetSocket = resolveLiveSocketForTarget(targetId).socket;
+    if (!targetSocket && targetSessionToken) {
+      targetSocket = resolveLiveSocketForTarget(targetSessionToken).socket;
+    }
+    if (targetSocket && targetSocket.id !== socket.id) {
+      targetSocket.emit('message-reactions', payload);
+    }
+    if (typeof ack === 'function') ack(result);
+  });
+
+  // ---- Read receipts ----
+  socket.on('mark-read', (data) => {
+    const partnerId = data && data.targetId;
+    if (!partnerId) return;
+    const myKey = socket.sessionToken || socket.id;
+    const { session: tSess } = resolveLiveSocketForTarget(partnerId);
+    const partnerKey = (tSess && sessionTokenOf(tSess)) || partnerId;
+    const result = features.markRead(myKey, partnerKey, data.lastMsgId);
+    const { socket: targetSocket } = resolveLiveSocketForTarget(partnerId);
+    if (targetSocket) {
+      targetSocket.emit('read-receipt', {
+        readerId: socket.id,
+        readerToken: socket.sessionToken,
+        lastMsgId: data.lastMsgId,
+        at: result.at
+      });
+    }
+  });
+
+  // ---- Mute ----
+  socket.on('mute-chat', (data, ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const partnerKey = (data && (data.targetSessionToken || data.targetId)) || null;
+    const result = data && data.unmute
+      ? features.unmutePartner(token, partnerKey)
+      : features.mutePartner(token, partnerKey);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('list-mutes', (ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    if (typeof ack === 'function') ack({ ok: true, mutes: features.listMutes(token) });
+  });
+
+  // ---- Unblock ----
+  socket.on('unblock-user', (data, ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const targetKey = data && (data.targetId || data.targetSessionToken);
+    const result = features.unblock(token, socket.id, targetKey, blockedUsers, blockedBySession);
+    broadcastOnlineUsers();
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('list-blocked', (ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const list = features.listBlocked(token, socket.id, blockedUsers, blockedBySession);
+    if (typeof ack === 'function') ack({ ok: true, blocked: list });
+  });
+
+  // ---- Invite link ----
+  socket.on('create-invite', (ack) => {
+    const token = socket.sessionToken || socketToSession.get(socket.id);
+    const username = (socket.profile && socket.profile.username) || 'Someone';
+    const result = features.createInvite(token, username);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  // Suppress muted notifications: wrap receive for muted (client also filters)
+  // (Server still delivers; client skips badge/sound when muted)
 
   // Explicit log off — remove immediately (no grace period)
   socket.on('logout', (ack) => {

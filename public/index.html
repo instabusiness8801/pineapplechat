@@ -766,6 +766,132 @@
         flex: 1 1 8rem;
       }
     }
+
+    .message-bubble {
+      cursor: pointer;
+      position: relative;
+    }
+    .message-bubble:hover {
+      filter: brightness(0.98);
+    }
+    .message-row {
+      position: relative;
+      max-width: 100%;
+    }
+    .msg-delete-btn {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      font-size: 10px;
+      line-height: 1;
+      padding: 3px 5px;
+      border-radius: 6px;
+      border: none;
+      background: rgba(0,0,0,0.12);
+      color: inherit;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 2;
+    }
+    .message-row:hover .msg-delete-btn,
+    .message-row:focus-within .msg-delete-btn {
+      opacity: 1;
+    }
+    @media (hover: none) {
+      .msg-delete-btn { opacity: 0.85; }
+    }
+    .message-self .msg-delete-btn {
+      color: rgba(42,35,28,0.85);
+    }
+    .message-reply-quote {
+      font-size: 0.7rem;
+      opacity: 0.9;
+      border-left: 2px solid rgba(0,0,0,0.2);
+      padding: 2px 0 2px 6px;
+      margin-bottom: 4px;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .message-self .message-reply-quote {
+      border-left-color: rgba(42,35,28,0.35);
+    }
+    .message-stranger .message-reply-quote {
+      border-left-color: var(--pine-leaf, #2d8a4e);
+    }
+    .auth-tab.is-active-auth {
+      background: var(--pine-leaf, #2d8a4e);
+      color: #fff;
+      border-color: transparent !important;
+    }
+    #account-modal:not(.hidden),
+    #report-modal:not(.hidden) {
+      display: flex !important;
+    }
+    .interest-chip.is-selected,
+    .status-chip.is-selected {
+      background: var(--pine-leaf, #2d8a4e);
+      color: #fff;
+      border-color: transparent !important;
+    }
+    .status-chip {
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .msg-reactions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      margin-top: 4px;
+    }
+    .msg-react-btn {
+      font-size: 11px;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.08);
+      background: rgba(255,255,255,0.7);
+      cursor: pointer;
+    }
+    .msg-react-counts {
+      font-size: 10px;
+      margin-top: 2px;
+      opacity: 0.85;
+    }
+    .friend-online-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      background: #22c55e;
+      margin-right: 4px;
+    }
+    .friend-offline-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      background: #94a3b8;
+      margin-right: 4px;
+    }
+    html[data-theme="dark"] .msg-react-btn {
+      background: rgba(30,30,30,0.8);
+      border-color: rgba(255,255,255,0.12);
+      color: #e5e7eb;
+    }
+    html[data-theme="dark"] .theme-surface {
+      box-shadow: 0 1px 0 rgba(255,255,255,0.03);
+    }
+    html[data-theme="dark"] .message-stranger {
+      background: #2a2f3a;
+    }
+    #voice-note-btn.is-recording {
+      color: #ef4444 !important;
+      animation: pulse 1s infinite;
+    }
+    #invite-banner {
+      background: linear-gradient(90deg, rgba(45,138,78,0.12), rgba(245,158,11,0.12));
+    }
   </style>
 </head>
 <body class="min-h-screen">
@@ -801,6 +927,19 @@
         <button type="button" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
           <i class="fa-solid fa-moon icon-moon text-sm"></i>
           <i class="fa-solid fa-sun icon-sun text-sm" style="color:var(--pine-gold)"></i>
+        </button>
+
+        <button type="button" id="invite-btn" title="Share invite link"
+                class="items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-amber-50 transition min-h-[36px]"
+                aria-label="Invite">
+          <i class="fa-solid fa-link text-sm"></i>
+          <span class="hidden sm:inline">Invite</span>
+        </button>
+        <button type="button" id="account-btn" title="Email account & friends"
+                class="items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-emerald-50 transition min-h-[36px]"
+                aria-label="Account">
+          <i class="fa-solid fa-envelope text-sm"></i>
+          <span class="hidden sm:inline" id="account-btn-label">Account</span>
         </button>
 
         <button type="button" id="logout-btn" title="Log off"
@@ -902,6 +1041,39 @@
               <button type="button" id="smiley-btn"
                       class="absolute bottom-1.5 right-1.5 text-xl leading-none px-1 py-0.5 hover:bg-gray-100 rounded transition"
                       title="Add smiley">😊</button>
+            </div>
+
+            <!-- What are you here for / interests (optional) -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">INTERESTS <span class="text-gray-500">(optional — pick up to 5)</span></label>
+              <div id="interest-tags" class="flex flex-wrap gap-1.5 text-[11px]">
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Friends">🤝 Friends</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Dating">💕 Dating</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Chit Chat">💬 Chit chat</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Music">🎵 Music</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Movies">🎬 Movies</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Sports">⚽ Sports</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Gaming">🎮 Gaming</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Travel">✈️ Travel</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Food">🍔 Food</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Tech">💻 Tech</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Art">🎨 Art</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Books">📚 Books</button>
+                <button type="button" class="interest-chip px-2 py-1 rounded-full border theme-border theme-muted" data-interest="Fitness">💪 Fitness</button>
+              </div>
+            </div>
+
+            <!-- Relationship status (optional) -->
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1.5">RELATIONSHIP STATUS <span class="text-gray-500">(optional)</span></label>
+              <div id="relationship-status-group" class="flex flex-wrap gap-1.5 text-[11px]" role="radiogroup" aria-label="Relationship status">
+                <button type="button" class="status-chip px-2.5 py-1 rounded-full border theme-border theme-muted" data-status="single">Single</button>
+                <button type="button" class="status-chip px-2.5 py-1 rounded-full border theme-border theme-muted" data-status="in_a_relationship">In a relationship</button>
+                <button type="button" class="status-chip px-2.5 py-1 rounded-full border theme-border theme-muted" data-status="married">Married</button>
+                <button type="button" class="status-chip px-2.5 py-1 rounded-full border theme-border theme-muted" data-status="divorced">Divorced</button>
+                <button type="button" class="status-chip px-2.5 py-1 rounded-full border theme-border theme-muted" data-status="separated">Separated</button>
+              </div>
+              <div class="text-[10px] text-gray-500 mt-1">Helps others know what kind of conversation you want.</div>
             </div>
 
             <!-- Profile Picture (optional): upload own OR pick a matching preset -->
@@ -1030,6 +1202,10 @@
             </select>
           </div>
 
+          <button type="button" id="reset-filters-btn" title="Reset all filters to defaults"
+                  class="text-xs px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 min-h-[36px] theme-text">
+            Reset
+          </button>
           <button type="button" id="refresh-sidebar-btn" class="text-xs px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50 min-h-[36px]">↻ Refresh</button>
         </div>
       </div>
@@ -1069,6 +1245,18 @@
                   <i class="fa-solid fa-door-open"></i>
                   <span class="hidden sm:inline text-[10px]">Leave</span>
                 </button>
+                <button type="button" id="add-friend-btn" title="Add as friend (requires email registration)" class="text-xs px-2 py-1.5 text-emerald-600 hover:bg-emerald-50 rounded flex items-center gap-1 min-h-[36px]">
+                  <i class="fa-solid fa-user-plus"></i>
+                  <span class="hidden sm:inline text-[10px]">Friend</span>
+                </button>
+                <button type="button" id="mute-chat-btn" title="Mute this chat" class="text-xs px-2 py-1.5 theme-muted hover:bg-gray-100 rounded flex items-center gap-1 min-h-[36px]">
+                  <i class="fa-solid fa-bell-slash"></i>
+                  <span class="hidden sm:inline text-[10px]">Mute</span>
+                </button>
+                <button type="button" id="report-user-btn" title="Report this user" class="text-xs px-2 py-1.5 text-amber-600 hover:bg-amber-50 rounded flex items-center gap-1 min-h-[36px]">
+                  <i class="fa-solid fa-flag"></i>
+                  <span class="hidden sm:inline text-[10px]">Report</span>
+                </button>
                 <button type="button" id="block-user-btn" title="Block this user" class="text-xs px-2 py-1.5 text-red-500 hover:bg-red-50 rounded flex items-center gap-1 min-h-[36px]">
                   <i class="fa-solid fa-ban"></i>
                   <span class="hidden sm:inline text-[10px]">Block</span>
@@ -1083,10 +1271,22 @@
 
             <div id="typing-indicator" class="hidden px-4 py-1 text-xs theme-muted italic theme-chat-bg flex-shrink-0">Stranger is typing...</div>
 
+            <!-- Reply-to preview bar -->
+            <div id="reply-preview-bar" class="hidden px-3 py-2 border-t theme-border theme-surface flex items-start gap-2 flex-shrink-0">
+              <div class="flex-1 min-w-0 border-l-2 border-emerald-500 pl-2">
+                <div class="text-[10px] font-semibold text-emerald-600" id="reply-preview-name">Reply</div>
+                <div class="text-xs theme-muted truncate" id="reply-preview-text"></div>
+              </div>
+              <button type="button" id="reply-preview-cancel" class="text-xs theme-muted hover:text-red-500 px-2" title="Cancel reply">✕</button>
+            </div>
+
             <div class="p-2 sm:p-3 theme-surface border-t theme-border chat-composer">
               <form id="multi-chat-form" class="flex gap-1.5 sm:gap-2 items-center">
-                <button type="button" id="attach-btn" title="Attach image or video (no links allowed)" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">
+                <button type="button" id="attach-btn" title="Attach image or video" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">
                   <i class="fa-solid fa-paperclip"></i>
+                </button>
+                <button type="button" id="voice-note-btn" title="Hold to record voice note" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">
+                  <i class="fa-solid fa-microphone"></i>
                 </button>
                 <button type="button" id="chat-emoji-btn" title="Add emoji" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">😊</button>
                 <input id="multi-chat-input" type="text" placeholder="Type a message…" enterkeyhint="send" autocomplete="off"
@@ -1094,9 +1294,11 @@
                 <button type="submit" class="btn-primary-g px-3 sm:px-5 py-2 rounded-2xl text-sm shadow-sm flex-shrink-0 min-h-[44px] min-w-[44px]" aria-label="Send">
                   <i class="fa-solid fa-paper-plane"></i>
                 </button>
-                <input type="file" id="attachment-input" accept="image/*,video/*" class="hidden" capture="environment">
+                <input type="file" id="attachment-input" accept="image/*,video/*,audio/*" class="hidden" capture="environment">
               </form>
+              <div id="voice-note-status" class="hidden text-[10px] mt-1 px-1 text-red-500 font-medium"></div>
               <div id="chat-limit-status" class="text-[10px] mt-1 px-1 theme-muted"></div>
+              <div id="read-receipt-status" class="text-[10px] mt-0.5 px-1 theme-muted"></div>
             </div>
           </div>
         </div>
@@ -1106,11 +1308,83 @@
     <!-- Info footer -->
     <div class="max-w-md mx-auto mt-8 text-center">
       <div class="flex justify-center items-center gap-x-2 text-xs text-gray-500">
-        <div class="px-3 py-1 rounded-full chip-teal text-[10px] font-medium">No data is stored</div>
-        <div class="px-3 py-1 rounded-full chip-yellow text-[10px] font-medium">No logs</div>
+        <div class="px-3 py-1 rounded-full chip-teal text-[10px] font-medium">Be respectful</div>
+        <div class="px-3 py-1 rounded-full chip-yellow text-[10px] font-medium">18+ only</div>
       </div>
     </div>
 
+  </div>
+
+  <!-- Account / Friends modal -->
+  <div id="account-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold theme-text-strong">Account &amp; Friends</h2>
+        <button type="button" id="account-modal-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
+      </div>
+      <p class="text-[11px] theme-muted mb-3">Register with email + password, confirm the 6-digit code, then add chat partners as friends.</p>
+
+      <div id="account-logged-out" class="space-y-3">
+        <div class="flex gap-2 text-xs mb-2">
+          <button type="button" data-auth-tab="register" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border is-active-auth">Register</button>
+          <button type="button" data-auth-tab="login" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Login</button>
+          <button type="button" data-auth-tab="verify" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Verify code</button>
+        </div>
+        <div id="auth-panel-register" class="auth-panel space-y-2">
+          <input id="reg-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <input id="reg-password" type="password" placeholder="Password (min 6)" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <button type="button" id="reg-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Create account</button>
+        </div>
+        <div id="auth-panel-login" class="auth-panel space-y-2 hidden">
+          <input id="login-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <input id="login-password" type="password" placeholder="Password" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <button type="button" id="login-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Log in</button>
+        </div>
+        <div id="auth-panel-verify" class="auth-panel space-y-2 hidden">
+          <input id="verify-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <input id="verify-code" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none tracking-widest">
+          <button type="button" id="verify-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Confirm email</button>
+          <button type="button" id="resend-code-btn" class="w-full text-xs theme-muted py-1">Resend code</button>
+        </div>
+        <div id="auth-dev-code" class="hidden text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800"></div>
+        <div id="auth-status" class="text-xs theme-muted"></div>
+      </div>
+
+      <div id="account-logged-in" class="hidden space-y-3">
+        <div class="text-sm theme-text">Signed in as <strong id="account-email-display"></strong></div>
+        <div>
+          <div class="text-xs font-semibold theme-text-strong mb-1">Friends <span class="font-normal theme-muted">(online first)</span></div>
+          <ul id="friends-list" class="text-xs space-y-1 theme-muted max-h-40 overflow-y-auto"></ul>
+          <p class="text-[10px] theme-muted mt-1">Tip: open a chat and tap <strong>Friend</strong> to add that person (they must also have a verified email).</p>
+        </div>
+        <div>
+          <div class="text-xs font-semibold theme-text-strong mb-1">Blocked users</div>
+          <ul id="blocked-list" class="text-xs space-y-1 theme-muted max-h-28 overflow-y-auto"></ul>
+        </div>
+        <button type="button" id="account-logout-email" class="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5">Sign out of email account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report user modal -->
+  <div id="report-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold theme-text-strong">Report user</h2>
+        <button type="button" id="report-modal-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
+      </div>
+      <p class="text-[11px] theme-muted mb-2">Why are you reporting this person?</p>
+      <select id="report-reason" class="w-full theme-input border rounded-xl px-3 py-2 text-sm mb-2">
+        <option value="harassment">Harassment / bullying</option>
+        <option value="spam">Spam / scams</option>
+        <option value="sexual">Sexual / inappropriate</option>
+        <option value="hate">Hate speech</option>
+        <option value="underage">Suspected underage</option>
+        <option value="other">Other</option>
+      </select>
+      <textarea id="report-details" maxlength="500" rows="3" placeholder="Optional details…" class="w-full theme-input border rounded-xl px-3 py-2 text-sm mb-3 resize-none"></textarea>
+      <button type="button" id="report-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Submit report</button>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -1187,17 +1461,18 @@
 
     // Avatar presets — DiceBear generates the image from seed, so label always matches the picture
     // Format: style + seed → unique cartoon-style avatar (not random stock photos)
+    // Cute themed avatars (DiceBear seeds = stable, fun characters)
     const AVATAR_PRESETS = [
-      { id: 'sunny',  label: 'Sunny',  url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=Sunny&size=128' },
-      { id: 'pixel',  label: 'Pixel',  url: 'https://api.dicebear.com/9.x/pixel-art/png?seed=PixelHero&size=128' },
-      { id: 'robot',  label: 'Robot',  url: 'https://api.dicebear.com/9.x/bottts/png?seed=RoboBuddy&size=128' },
-      { id: 'hero',   label: 'Hero',   url: 'https://api.dicebear.com/9.x/adventurer/png?seed=HeroQuest&size=128' },
-      { id: 'nova',   label: 'Nova',   url: 'https://api.dicebear.com/9.x/lorelei/png?seed=NovaStar&size=128' },
-      { id: 'bolt',   label: 'Bolt',   url: 'https://api.dicebear.com/9.x/big-smile/png?seed=BoltFlash&size=128' },
-      { id: 'echo',   label: 'Echo',   url: 'https://api.dicebear.com/9.x/notionists/png?seed=EchoWave&size=128' },
-      { id: 'spark',  label: 'Spark',  url: 'https://api.dicebear.com/9.x/avataaars/png?seed=SparkJoy&size=128' },
-      { id: 'misty',  label: 'Misty',  url: 'https://api.dicebear.com/9.x/personas/png?seed=MistyDawn&size=128' },
-      { id: 'chill',  label: 'Chill',  url: 'https://api.dicebear.com/9.x/thumbs/png?seed=ChillVibes&size=128' }
+      { id: 'mochi',     label: 'Mochi',     url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=MochiPuff&size=128' },
+      { id: 'bubbles',   label: 'Bubbles',   url: 'https://api.dicebear.com/9.x/lorelei/png?seed=BubblesPop&size=128' },
+      { id: 'pocky',     label: 'Pocky',     url: 'https://api.dicebear.com/9.x/adventurer/png?seed=PockyBean&size=128' },
+      { id: 'nori',      label: 'Nori',      url: 'https://api.dicebear.com/9.x/big-smile/png?seed=NoriSushi&size=128' },
+      { id: 'kiwi',      label: 'Kiwi',      url: 'https://api.dicebear.com/9.x/avataaars/png?seed=KiwiCutie&size=128' },
+      { id: 'pebbles',   label: 'Pebbles',   url: 'https://api.dicebear.com/9.x/pixel-art/png?seed=PebblesPix&size=128' },
+      { id: 'coco',      label: 'Coco',      url: 'https://api.dicebear.com/9.x/notionists/png?seed=CocoBean&size=128' },
+      { id: 'lulu',      label: 'Lulu',      url: 'https://api.dicebear.com/9.x/personas/png?seed=LuluCloud&size=128' },
+      { id: 'boba',      label: 'Boba',      url: 'https://api.dicebear.com/9.x/bottts/png?seed=BobaBot&size=128' },
+      { id: 'cupcake',   label: 'Cupcake',   url: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=CupcakeHug&size=128' }
     ];
 
     // Demo users: OFF for production (Render). Local only if ENABLE_DEMO_USERS=true on server.
@@ -1212,22 +1487,22 @@
           country: 'United States',
           city: 'New York',
           location: 'New York, United States',
-          image: 'https://api.dicebear.com/9.x/adventurer/png?seed=HeroQuest&size=128',
-          whatsOnMind: 'Up, up and away!',
+          image: 'https://api.dicebear.com/9.x/adventurer/png?seed=PockyBean&size=128',
+          whatsOnMind: 'Looking for chill chats!',
           preference: 'anyone'
         }
       },
       {
         id: 'demo-goku',
         profile: {
-          username: 'Goku',
+          username: 'Mochi',
           gender: 'male',
           age: 28,
           country: 'Japan',
           city: 'Tokyo',
           location: 'Tokyo, Japan',
-          image: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=Sunny&size=128',
-          whatsOnMind: 'Power level rising!',
+          image: 'https://api.dicebear.com/9.x/fun-emoji/png?seed=MochiPuff&size=128',
+          whatsOnMind: 'Soft vibes only 🍡',
           preference: 'anyone'
         }
       }
@@ -1369,6 +1644,34 @@
     const SESSION_KEY = 'pineapplechat-session';
     let SESSION_GRACE_MS = 15 * 60 * 1000;
     let sessionToken = null;
+    /** @type {{ msgId: string|null, text: string, username: string }|null} */
+    let pendingReply = null;
+    /** Client-side blocked partner ids / session tokens */
+    let blockedIds = new Set();
+    /** Verified email account summary from server */
+    let myAccount = null;
+    /** In-memory only — re-bind account after set-profile creates sessionToken */
+    let accountPasswordCache = null;
+    let accountEmailCache = null;
+    /** selected interest tags (max 5) */
+    let selectedInterests = [];
+    /** relationship status: single | in_a_relationship | married | divorced | separated | null */
+    let selectedRelationshipStatus = null;
+
+    const RELATIONSHIP_STATUS_LABELS = {
+      single: 'Single',
+      in_a_relationship: 'In a relationship',
+      married: 'Married',
+      divorced: 'Divorced',
+      separated: 'Separated'
+    };
+    /** muted partner ids/tokens */
+    let mutedIds = new Set();
+    /** msgId -> reaction counts */
+    const reactionMap = new Map();
+    let voiceRecorder = null;
+    let voiceChunks = [];
+    let voiceRecording = false;
     /** Set true after intentional Log off so reconnect never re-registers the old profile. */
     let intentionalLogout = false;
     /** When true, browser back / leave is allowed without re-prompting. */
@@ -1569,10 +1872,13 @@
         fromSelf: false,
         time: data.time,
         system: false,
-        msgId: data.msgId || null
+        msgId: data.msgId || null,
+        replyTo: data.replyTo || null
       });
       chats[targetChatId].consecutiveSent = 0;
-      if (targetChatId !== activeChatId) {
+      const partnerTok = chats[targetChatId].partnerSessionToken;
+      const isMutedChat = mutedIds.has(targetChatId) || (partnerTok && mutedIds.has(partnerTok));
+      if (targetChatId !== activeChatId && !isMutedChat) {
         chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
       }
       chats[targetChatId].lastMessageTs = Date.now();
@@ -1604,7 +1910,9 @@
       }
       if (data.senderSessionToken) chats[targetChatId].partnerSessionToken = data.senderSessionToken;
 
-      if (targetChatId !== activeChatId) {
+      const partnerTokA = chats[targetChatId].partnerSessionToken;
+      const isMutedAtt = mutedIds.has(targetChatId) || (partnerTokA && mutedIds.has(partnerTokA));
+      if (targetChatId !== activeChatId && !isMutedAtt) {
         chats[targetChatId].unread = (chats[targetChatId].unread || 0) + 1;
       }
       chats[targetChatId].consecutiveSent = 0;
@@ -1960,6 +2268,10 @@
         if (!data) return;
         // Sender already stored message client-side for instant UI
         if (data.fromSelf) {
+          // Keep sender msgId in sync with server (critical for shared reactions)
+          if (data.msgId) {
+            syncSelfMessageId(data.msgId, data.text, activeChatId);
+          }
           if (activeChatId) {
             const ind = document.getElementById('typing-indicator');
             if (ind) ind.classList.add('hidden');
@@ -1975,10 +2287,17 @@
 
         // Live paint if this chat is open; otherwise unread badge only
         if (targetChatId === activeChatId) {
-          addMessageToChatEl(data.text, false, data.time);
+          addMessageToChatEl(data.text, false, data.time, {
+            msgId: data.msgId || null,
+            replyTo: data.replyTo || null
+          });
           const ind = document.getElementById('typing-indicator');
           if (ind) ind.classList.add('hidden');
           updateChatLimitStatus();
+          // Partner may already have reacted if they got our msg first — re-apply counts
+          if (data.msgId && reactionMap.has(data.msgId)) {
+            applyReactionSnapshotToDom(data.msgId, reactionMap.get(data.msgId));
+          }
         }
       });
 
@@ -1999,7 +2318,7 @@
         renderSidebarUsers();
 
         if (targetChatId === activeChatId) {
-          renderAttachmentInChat(data.attachment, false, data.time);
+          renderAttachmentInChat(data.attachment, false, data.time, { msgId: data.msgId || null });
           const ind = document.getElementById('typing-indicator');
           if (ind) ind.classList.add('hidden');
           updateChatLimitStatus();
@@ -2028,6 +2347,48 @@
       socket.on('delivery-status', (info) => {
         if (!info || !info.message) return;
         console.log('[PineappleChat]', info.message);
+      });
+
+      socket.on('block-ok', (info) => {
+        if (info && info.targetId) blockedIds.add(info.targetId);
+        if (info && info.targetSessionToken) blockedIds.add(info.targetSessionToken);
+        renderSidebarUsers();
+      });
+
+      socket.on('friend-added', (info) => {
+        if (info && info.message) {
+          console.log('[PineappleChat]', info.message);
+        }
+        if (socket) {
+          socket.emit('friend-list', (res) => {
+            if (res && res.ok && myAccount) {
+              myAccount.friends = res.friends || [];
+              refreshFriendsListUI(res.friends);
+            }
+          });
+        }
+      });
+
+      socket.on('message-reactions', (payload) => {
+        if (!payload || !payload.msgId) return;
+        reactionMap.set(payload.msgId, payload.reactions || {});
+        applyReactionSnapshotToDom(payload.msgId, payload.reactions || {});
+      });
+
+      // Silent unsend — remove locally with no "deleted" placeholder
+      socket.on('message-deleted', (payload) => {
+        if (!payload || !payload.msgId) return;
+        removeMessageEverywhere(payload.msgId, { silent: true });
+      });
+
+      socket.on('read-receipt', (payload) => {
+        if (!payload) return;
+        const el = document.getElementById('read-receipt-status');
+        if (!el) return;
+        // Only show for active chat when partner read our messages
+        if (!activeChatId) return;
+        el.textContent = 'Seen';
+        el.style.color = 'var(--pine-leaf, #2d8a4e)';
       });
 
       socket.on('chat-left', (data) => {
@@ -2100,13 +2461,341 @@
       return socket;
     }
 
-    function addMessageToChatEl(text, isSelf, time = null) {
+    function setPendingReply(reply) {
+      pendingReply = reply;
+      const bar = document.getElementById('reply-preview-bar');
+      const nameEl = document.getElementById('reply-preview-name');
+      const textEl = document.getElementById('reply-preview-text');
+      if (!bar) return;
+      if (!reply) {
+        bar.classList.add('hidden');
+        if (nameEl) nameEl.textContent = '';
+        if (textEl) textEl.textContent = '';
+        return;
+      }
+      bar.classList.remove('hidden');
+      if (nameEl) nameEl.textContent = 'Replying to ' + (reply.username || 'message');
+      if (textEl) textEl.textContent = reply.text || '';
+      if (multiChatInput) multiChatInput.focus();
+    }
+
+    function clearPendingReply() {
+      setPendingReply(null);
+    }
+
+    function updateAccountBtnLabel() {
+      const el = document.getElementById('account-btn-label');
+      if (!el) return;
+      if (myAccount && myAccount.email) {
+        el.textContent = myAccount.email.split('@')[0];
+      } else {
+        el.textContent = 'Account';
+      }
+    }
+
+    function refreshFriendsListUI(friendsPayload) {
+      const ul = document.getElementById('friends-list');
+      if (!ul) return;
+      ul.innerHTML = '';
+      const list = friendsPayload || (myAccount && myAccount.friends) || [];
+      if (!list.length) {
+        ul.innerHTML = '<li class="theme-muted">No friends yet.</li>';
+        return;
+      }
+      list.forEach((item) => {
+        const email = typeof item === 'string' ? item : item.email;
+        const online = typeof item === 'object' && item.online;
+        const away = typeof item === 'object' && item.away;
+        const username = typeof item === 'object' ? item.username : null;
+        const li = document.createElement('li');
+        li.className = 'py-1 flex items-center justify-between gap-2';
+        const left = document.createElement('span');
+        left.innerHTML = `<span class="${online ? 'friend-online-dot' : 'friend-offline-dot'}" title="${online ? 'Online' : (away ? 'Away' : 'Offline')}"></span>` +
+          escapeHtml(username ? `${username} · ${email}` : email) +
+          (online ? ' <span class="text-emerald-600">online</span>' : (away ? ' <span class="text-amber-600">away</span>' : ''));
+        li.appendChild(left);
+        if (online && typeof item === 'object' && item.socketId) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
+          btn.textContent = 'Chat';
+          btn.onclick = () => {
+            closeAccountModal();
+            ensureChat(item.socketId, { username: username || email }, item.sessionToken);
+            showScreen('hub');
+            switchToChat(item.socketId);
+            if (socket) socket.emit('start-chat-with', { targetId: item.socketId });
+          };
+          li.appendChild(btn);
+        }
+        ul.appendChild(li);
+      });
+    }
+
+    function refreshBlockedListUI() {
+      const ul = document.getElementById('blocked-list');
+      if (!ul) return;
+      ul.innerHTML = '';
+      if (!blockedIds.size) {
+        ul.innerHTML = '<li class="theme-muted">No blocked users.</li>';
+        return;
+      }
+      Array.from(blockedIds).forEach((id) => {
+        const li = document.createElement('li');
+        li.className = 'py-1 flex items-center justify-between gap-2';
+        const span = document.createElement('span');
+        span.className = 'truncate';
+        span.textContent = String(id).slice(0, 16) + (String(id).length > 16 ? '…' : '');
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-[10px] text-emerald-600 px-2 py-0.5 border border-emerald-200 rounded';
+        btn.textContent = 'Unblock';
+        btn.onclick = () => {
+          if (!socket) return;
+          socket.emit('unblock-user', { targetId: id }, (res) => {
+            if (res && res.ok) {
+              blockedIds.delete(id);
+              refreshBlockedListUI();
+              renderSidebarUsers();
+            }
+          });
+        };
+        li.appendChild(span);
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+    }
+
+    function openAccountModal() {
+      const modal = document.getElementById('account-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      const loggedOut = document.getElementById('account-logged-out');
+      const loggedIn = document.getElementById('account-logged-in');
+      if (myAccount && myAccount.verified) {
+        if (loggedOut) loggedOut.classList.add('hidden');
+        if (loggedIn) loggedIn.classList.remove('hidden');
+        const disp = document.getElementById('account-email-display');
+        if (disp) disp.textContent = myAccount.email;
+        refreshFriendsListUI();
+        refreshBlockedListUI();
+        if (socket) {
+          socket.emit('friend-list', (res) => {
+            if (res && res.ok) {
+              myAccount = myAccount || {};
+              myAccount.friends = res.friends || [];
+              myAccount.email = res.email || myAccount.email;
+              refreshFriendsListUI(res.friends);
+            }
+          });
+          socket.emit('list-blocked', (res) => {
+            if (res && res.blocked) {
+              res.blocked.forEach((id) => blockedIds.add(id));
+              refreshBlockedListUI();
+            }
+          });
+        }
+      } else {
+        if (loggedOut) loggedOut.classList.remove('hidden');
+        if (loggedIn) loggedIn.classList.add('hidden');
+      }
+    }
+
+    function closeAccountModal() {
+      const modal = document.getElementById('account-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function showAuthDevCode(code) {
+      const box = document.getElementById('auth-dev-code');
+      if (!box) return;
+      if (!code) {
+        box.classList.add('hidden');
+        box.textContent = '';
+        return;
+      }
+      box.classList.remove('hidden');
+      box.textContent = 'Demo verification code: ' + code + ' (no real email is sent — enter this code under Verify)';
+    }
+
+    function setAuthStatus(msg, isError) {
+      const el = document.getElementById('auth-status');
+      if (!el) return;
+      el.textContent = msg || '';
+      el.style.color = isError ? '#dc2626' : '';
+    }
+
+    function switchAuthTab(tab) {
+      document.querySelectorAll('.auth-tab').forEach((b) => {
+        b.classList.toggle('is-active-auth', b.dataset.authTab === tab);
+      });
+      document.querySelectorAll('.auth-panel').forEach((p) => p.classList.add('hidden'));
+      const panel = document.getElementById('auth-panel-' + tab);
+      if (panel) panel.classList.remove('hidden');
+    }
+
+    function setupAccountModal() {
+      const modal = document.getElementById('account-modal');
+      const openBtn = document.getElementById('account-btn');
+      const closeBtn = document.getElementById('account-modal-close');
+      if (openBtn) openBtn.addEventListener('click', () => openAccountModal());
+      if (closeBtn) closeBtn.addEventListener('click', () => closeAccountModal());
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) closeAccountModal();
+        });
+      }
+      document.querySelectorAll('.auth-tab').forEach((btn) => {
+        btn.addEventListener('click', () => switchAuthTab(btn.dataset.authTab));
+      });
+
+      const regSubmit = document.getElementById('reg-submit');
+      if (regSubmit) {
+        regSubmit.addEventListener('click', () => {
+          if (!socket) connectSocket();
+          const email = (document.getElementById('reg-email') || {}).value;
+          const password = (document.getElementById('reg-password') || {}).value;
+          socket.emit('account-register', { email, password }, (res) => {
+            if (!res || !res.ok) {
+              setAuthStatus((res && res.message) || 'Registration failed', true);
+              return;
+            }
+            accountEmailCache = email;
+            accountPasswordCache = password;
+            setAuthStatus(res.message || 'Registered — enter the verification code.');
+            showAuthDevCode(res.devCode);
+            const ve = document.getElementById('verify-email');
+            if (ve) ve.value = email;
+            switchAuthTab('verify');
+          });
+        });
+      }
+
+      const loginSubmit = document.getElementById('login-submit');
+      if (loginSubmit) {
+        loginSubmit.addEventListener('click', () => {
+          if (!socket) connectSocket();
+          const email = (document.getElementById('login-email') || {}).value;
+          const password = (document.getElementById('login-password') || {}).value;
+          socket.emit('account-login', { email, password }, (res) => {
+            if (res && res.needsVerification) {
+              accountEmailCache = email;
+              accountPasswordCache = password;
+              setAuthStatus(res.message, true);
+              showAuthDevCode(res.devCode);
+              const ve = document.getElementById('verify-email');
+              if (ve) ve.value = email;
+              switchAuthTab('verify');
+              return;
+            }
+            if (!res || !res.ok) {
+              setAuthStatus((res && res.message) || 'Login failed', true);
+              return;
+            }
+            accountEmailCache = email;
+            accountPasswordCache = password;
+            myAccount = res.account;
+            setAuthStatus('Logged in.');
+            showAuthDevCode(null);
+            updateAccountBtnLabel();
+            openAccountModal();
+          });
+        });
+      }
+
+      const verifySubmit = document.getElementById('verify-submit');
+      if (verifySubmit) {
+        verifySubmit.addEventListener('click', () => {
+          if (!socket) connectSocket();
+          const email = (document.getElementById('verify-email') || {}).value;
+          const code = (document.getElementById('verify-code') || {}).value;
+          socket.emit('account-verify', { email, code }, (res) => {
+            if (!res || !res.ok) {
+              setAuthStatus((res && res.message) || 'Verification failed', true);
+              return;
+            }
+            accountEmailCache = email;
+            myAccount = res.account;
+            // Bind may need sessionToken — re-login if we have password cache
+            if (accountPasswordCache && sessionToken) {
+              socket.emit('account-login', { email, password: accountPasswordCache }, () => {});
+            }
+            setAuthStatus(res.message || 'Verified!');
+            showAuthDevCode(null);
+            updateAccountBtnLabel();
+            openAccountModal();
+          });
+        });
+      }
+
+      const resendBtn = document.getElementById('resend-code-btn');
+      if (resendBtn) {
+        resendBtn.addEventListener('click', () => {
+          if (!socket) connectSocket();
+          const email = (document.getElementById('verify-email') || {}).value;
+          socket.emit('account-resend-code', { email }, (res) => {
+            if (!res || !res.ok) {
+              setAuthStatus((res && res.message) || 'Could not resend', true);
+              return;
+            }
+            setAuthStatus(res.message || 'Code resent');
+            showAuthDevCode(res.devCode);
+          });
+        });
+      }
+
+      const emailLogout = document.getElementById('account-logout-email');
+      if (emailLogout) {
+        emailLogout.addEventListener('click', () => {
+          myAccount = null;
+          updateAccountBtnLabel();
+          openAccountModal();
+          setAuthStatus('Signed out of email account (chat profile may still be active).');
+        });
+      }
+    }
+
+    function addMessageToChatEl(text, isSelf, time = null, meta = null) {
       if (!chatMessagesEl) return;
+      const msgId = meta && meta.msgId ? meta.msgId : null;
+      const replyTo = meta && meta.replyTo ? meta.replyTo : null;
+
       const wrapper = document.createElement('div');
-      wrapper.className = `flex ${isSelf ? 'justify-end' : 'justify-start'} message-enter`;
+      wrapper.className = `flex ${isSelf ? 'justify-end' : 'justify-start'} message-enter message-row`;
+      if (msgId) wrapper.dataset.msgId = msgId;
 
       const bubble = document.createElement('div');
       bubble.className = `message-bubble ${isSelf ? 'message-self' : 'message-stranger'}`;
+      bubble.title = isSelf ? 'Tap to reply · hover for delete' : 'Tap to reply';
+      if (msgId) bubble.dataset.msgId = msgId;
+
+      if (isSelf && msgId) {
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'msg-delete-btn';
+        delBtn.title = 'Delete for everyone (no notice)';
+        delBtn.setAttribute('aria-label', 'Delete message');
+        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        delBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          requestDeleteMessage(bubble.dataset.msgId || msgId);
+        });
+        bubble.appendChild(delBtn);
+      }
+
+      if (replyTo && (replyTo.text || replyTo.username)) {
+        const q = document.createElement('div');
+        q.className = 'message-reply-quote';
+        const qName = document.createElement('div');
+        qName.className = 'font-semibold opacity-90';
+        qName.textContent = replyTo.username || 'User';
+        const qText = document.createElement('div');
+        qText.className = 'truncate';
+        qText.textContent = replyTo.text || '';
+        q.appendChild(qName);
+        q.appendChild(qText);
+        bubble.appendChild(q);
+      }
 
       const messageText = document.createElement('div');
       messageText.textContent = text;
@@ -2120,9 +2809,185 @@
         bubble.appendChild(timeEl);
       }
 
+      // Tap / click bubble → set reply target
+      bubble.addEventListener('click', (e) => {
+        if (e.target.closest('.msg-react-btn')) return;
+        e.stopPropagation();
+        let who = 'You';
+        if (!isSelf && activeChatId && chats[activeChatId] && chats[activeChatId].partnerProfile) {
+          who = chats[activeChatId].partnerProfile.username || 'Stranger';
+        }
+        setPendingReply({
+          msgId: msgId,
+          text: String(text || '').slice(0, 160),
+          username: who
+        });
+      });
+
+      // Reactions row
+      if (msgId) {
+        const reactRow = document.createElement('div');
+        reactRow.className = 'msg-reactions';
+        ['👍', '❤️', '😂'].forEach((emoji) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'msg-react-btn';
+          b.textContent = emoji;
+          b.title = 'React ' + emoji;
+          b.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (!socket || !activeChatId) return;
+            // Use live id from DOM (may have been synced after send)
+            const liveId = bubble.dataset.msgId || msgId;
+            const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+            socket.emit('message-react', {
+              msgId: liveId,
+              emoji,
+              targetId: activeChatId,
+              targetSessionToken: partnerTok || null
+            }, (res) => {
+              if (res && res.snapshot) {
+                reactionMap.set(liveId, res.snapshot);
+                applyReactionSnapshotToDom(liveId, res.snapshot);
+              }
+            });
+          });
+          reactRow.appendChild(b);
+        });
+        bubble.appendChild(reactRow);
+        const countsEl = document.createElement('div');
+        countsEl.className = 'msg-react-counts';
+        countsEl.dataset.msgId = msgId;
+        const snap = reactionMap.get(msgId);
+        if (snap) renderReactionCounts(countsEl, snap);
+        bubble.appendChild(countsEl);
+      }
+
       wrapper.appendChild(bubble);
       chatMessagesEl.appendChild(wrapper);
       scrollChatToBottom();
+    }
+
+    function renderReactionCounts(el, snapshot) {
+      if (!el) return;
+      if (!snapshot || !Object.keys(snapshot).length) {
+        el.textContent = '';
+        return;
+      }
+      el.textContent = Object.entries(snapshot).map(([e, n]) => e + ' ' + n).join('  ');
+    }
+
+    /** Shared client msg ids so T1 and T2 react to the same message key */
+    function newClientMsgId() {
+      try {
+        if (window.crypto && crypto.getRandomValues) {
+          const a = new Uint8Array(8);
+          crypto.getRandomValues(a);
+          return Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('');
+        }
+      } catch (e) { /* ignore */ }
+      return ('m' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).slice(0, 24);
+    }
+
+    function applyReactionSnapshotToDom(msgId, snapshot) {
+      if (!msgId) return;
+      document.querySelectorAll('.msg-react-counts').forEach((el) => {
+        if (el.dataset.msgId === msgId) {
+          renderReactionCounts(el, snapshot || {});
+        }
+      });
+    }
+
+    /**
+     * Remove a message from all local chat histories + DOM.
+     * No system/tombstone message — leaves no trail for either user.
+     */
+    function removeMessageEverywhere(msgId, opts) {
+      if (!msgId) return;
+      reactionMap.delete(msgId);
+      if (pendingReply && pendingReply.msgId === msgId) clearPendingReply();
+
+      Object.keys(chats).forEach((cid) => {
+        const c = chats[cid];
+        if (!c || !Array.isArray(c.messages)) return;
+        const before = c.messages.length;
+        c.messages = c.messages.filter((m) => m.msgId !== msgId);
+        if (c.messages.length !== before) {
+          // recompute last activity lightly
+          c.lastMessageTs = c.lastMessageTs || Date.now();
+        }
+      });
+
+      // Remove from open chat DOM (no placeholder left behind)
+      if (chatMessagesEl) {
+        chatMessagesEl.querySelectorAll('[data-msg-id]').forEach((el) => {
+          if (el.dataset.msgId !== msgId) return;
+          const row = el.closest('.message-row') || el.closest('.flex.message-enter') || el.parentElement;
+          if (row && row.parentElement === chatMessagesEl) row.remove();
+          else if (row) row.remove();
+          else el.remove();
+        });
+      }
+      saveSession();
+      renderSidebarUsers();
+    }
+
+    function requestDeleteMessage(msgId) {
+      if (!msgId || !socket || !activeChatId) return;
+      if (!confirm('Delete this message for everyone? The other person will not see that it was deleted.')) return;
+      const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+      // Optimistic local remove
+      removeMessageEverywhere(msgId, { silent: true });
+      socket.emit('delete-message', {
+        msgId,
+        targetId: activeChatId,
+        targetSessionToken: partnerTok || null
+      }, (res) => {
+        if (res && res.ok === false) {
+          // Rare: restore would be hard; just notify
+          console.warn('[PineappleChat] delete failed', res.message);
+        }
+      });
+    }
+
+    /** Align sender's stored/DOM msgId with the id both peers use for reactions */
+    function syncSelfMessageId(serverMsgId, text, chatId) {
+      if (!serverMsgId || !chatId || !chats[chatId]) return;
+      const msgs = chats[chatId].messages || [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (!m || !m.fromSelf || m.attachment) continue;
+        if (text != null && m.text !== text) continue;
+        const oldId = m.msgId;
+        if (oldId === serverMsgId) return;
+        m.msgId = serverMsgId;
+        if (oldId && reactionMap.has(oldId)) {
+          reactionMap.set(serverMsgId, reactionMap.get(oldId));
+          reactionMap.delete(oldId);
+        }
+        // Update live bubbles if this chat is open
+        if (chatId === activeChatId && chatMessagesEl) {
+          chatMessagesEl.querySelectorAll('.message-bubble').forEach((bubble) => {
+            if (bubble.dataset.msgId === oldId || (!bubble.dataset.msgId && oldId)) {
+              if (oldId && bubble.dataset.msgId === oldId) {
+                bubble.dataset.msgId = serverMsgId;
+              }
+            }
+            if (bubble.dataset.msgId === oldId) bubble.dataset.msgId = serverMsgId;
+          });
+          chatMessagesEl.querySelectorAll('.msg-react-counts').forEach((el) => {
+            if (el.dataset.msgId === oldId) el.dataset.msgId = serverMsgId;
+          });
+          // Re-bind is hard for click handlers — they closed over old msgId.
+          // If ids already match at send time, no problem. Re-render active chat if id changed.
+          if (oldId && oldId !== serverMsgId) {
+            // Soft re-render of this chat so reaction buttons use new msgId
+            const was = activeChatId;
+            if (was === chatId) switchToChat(chatId);
+          }
+        }
+        break;
+      }
     }
 
     function addSystemMessage(text) {
@@ -2182,15 +3047,32 @@
       });
     }
 
-    function renderAttachmentInChat(attachment, fromSelf, time) {
+    function renderAttachmentInChat(attachment, fromSelf, time, meta) {
       if (!chatMessagesEl || !activeChatId || !attachment) return;
+      const msgId = meta && meta.msgId ? meta.msgId : null;
 
       const wrapper = document.createElement('div');
-      wrapper.className = `flex ${fromSelf ? 'justify-end' : 'justify-start'} message-enter min-w-0`;
+      wrapper.className = `flex ${fromSelf ? 'justify-end' : 'justify-start'} message-enter message-row min-w-0`;
+      if (msgId) wrapper.dataset.msgId = msgId;
 
       const container = document.createElement('div');
       // Constrained width so large images never expand the pane and hide the composer
-      container.className = `chat-attach-wrap p-1 rounded-xl overflow-hidden ${fromSelf ? 'attach-self' : 'attach-other'}`;
+      container.className = `chat-attach-wrap p-1 rounded-xl overflow-hidden relative ${fromSelf ? 'attach-self' : 'attach-other'}`;
+      if (msgId) container.dataset.msgId = msgId;
+
+      if (fromSelf && msgId) {
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'msg-delete-btn';
+        delBtn.style.opacity = '0.9';
+        delBtn.title = 'Delete for everyone (no notice)';
+        delBtn.innerHTML = '<i class="fa-solid fa-trash"></i>';
+        delBtn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          requestDeleteMessage(msgId);
+        });
+        container.appendChild(delBtn);
+      }
 
       const onMediaReady = () => scrollChatToBottom();
 
@@ -2212,6 +3094,19 @@
         video.addEventListener('loadedmetadata', onMediaReady);
         video.addEventListener('error', onMediaReady);
         container.appendChild(video);
+      } else if (attachment.type.startsWith('audio/')) {
+        const audio = document.createElement('audio');
+        audio.src = attachment.data;
+        audio.controls = true;
+        audio.preload = 'metadata';
+        audio.className = 'w-full max-w-[240px]';
+        audio.addEventListener('loadedmetadata', onMediaReady);
+        audio.addEventListener('error', onMediaReady);
+        container.appendChild(audio);
+        const label = document.createElement('div');
+        label.className = 'text-[10px] px-1 pt-1 theme-muted';
+        label.textContent = '🎤 Voice note';
+        container.appendChild(label);
       }
 
       if (attachment.name) {
@@ -2242,6 +3137,52 @@
         socket.emit('set-profile', currentProfile);
       }
       socket.emit('request-online-users');
+    }
+
+    function applyGenderFilterActive(btn) {
+      if (!btn) return;
+      const group = btn.parentElement;
+      if (!group) return;
+      group.querySelectorAll('.gender-filter-btn').forEach((b) => {
+        b.classList.remove('is-active-all', 'is-active-male', 'is-active-female', 'bg-blue-600', 'text-white');
+        b.classList.add('border', 'border-gray-300');
+      });
+      btn.classList.remove('border', 'border-gray-300');
+      const g = btn.dataset.gender;
+      if (g === 'male') btn.classList.add('is-active-male');
+      else if (g === 'female') btn.classList.add('is-active-female');
+      else btn.classList.add('is-active-all');
+    }
+
+    /** Reset hub filters UI + state to defaults (All / 18–99 / any location). */
+    function resetFilters() {
+      currentFilters = {
+        gender: 'all',
+        minAge: MIN_AGE,
+        maxAge: MAX_AGE,
+        country: '',
+        city: ''
+      };
+
+      const allBtn = document.querySelector('#sidebar-gender-filters .gender-filter-btn[data-gender="all"]');
+      if (allBtn) applyGenderFilterActive(allBtn);
+
+      const minInput = document.getElementById('sidebar-age-min');
+      const maxInput = document.getElementById('sidebar-age-max');
+      if (minInput) minInput.value = String(MIN_AGE);
+      if (maxInput) maxInput.value = String(MAX_AGE);
+
+      const countryFilter = document.getElementById('sidebar-country-filter');
+      const cityFilter = document.getElementById('sidebar-city-filter');
+      if (countryFilter) countryFilter.value = '';
+      if (cityFilter) {
+        populateCitySelect(cityFilter, '', 'All');
+        cityFilter.value = '';
+        cityFilter.disabled = true;
+      }
+
+      if (typeof saveSession === 'function') saveSession();
+      renderSidebarUsers();
     }
 
     function updateFilters() {
@@ -2526,6 +3467,8 @@
       let filtered = listForSidebar.filter(user => {
         if (!user || !user.profile || user.id === currentSocketId) return false;
         if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
+        // Hide blocked users
+        if (blockedIds.has(user.id) || (user.sessionToken && blockedIds.has(user.sessionToken))) return false;
         const p = user.profile;
         const age = parseInt(p.age) || 0;
 
@@ -2744,6 +3687,12 @@
             <div class="font-semibold text-sm sm:text-base truncate" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}</div>
             <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${escapeHtml(headerProf.age != null ? String(headerProf.age) : '?')} • ${escapeHtml(headerProf.location || 'Unknown')}</div>
             ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate hidden sm:block">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
+            ${headerProf.relationshipStatus && RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus]
+              ? `<div class="text-[9px] theme-muted truncate">${escapeHtml(RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus])}</div>`
+              : ''}
+            ${Array.isArray(headerProf.interests) && headerProf.interests.length
+              ? `<div class="text-[9px] theme-muted truncate hidden sm:block">${escapeHtml(headerProf.interests.join(' · '))}</div>`
+              : ''}
           </div>
         </div>
       `;
@@ -2760,12 +3709,28 @@
           w.appendChild(pill);
           chatMessagesEl.appendChild(w);
         } else if (msg.attachment) {
-          renderAttachmentInChat(msg.attachment, !!msg.fromSelf, msg.time);
+          renderAttachmentInChat(msg.attachment, !!msg.fromSelf, msg.time, { msgId: msg.msgId || null });
         } else {
-          addMessageToChatEl(msg.text, msg.fromSelf, msg.time);
+          addMessageToChatEl(msg.text, msg.fromSelf, msg.time, {
+            msgId: msg.msgId || null,
+            replyTo: msg.replyTo || null
+          });
         }
       });
       scrollChatToBottom();
+      clearPendingReply();
+
+      // Mark messages as read (read receipts)
+      if (socket && partnerId) {
+        const last = chatData.messages && chatData.messages.length
+          ? chatData.messages[chatData.messages.length - 1]
+          : null;
+        socket.emit('mark-read', {
+          targetId: partnerId,
+          lastMsgId: last && last.msgId ? last.msgId : null
+        });
+      }
+      updateMuteButtonLabel(partnerId);
 
       // Re-render sidebar to highlight active + clear badge
       renderSidebarUsers();
@@ -2774,6 +3739,19 @@
       setTimeout(() => multiChatInput && multiChatInput.focus(), 50);
 
       updateChatLimitStatus();
+    }
+
+    function updateMuteButtonLabel(partnerId) {
+      const btn = document.getElementById('mute-chat-btn');
+      if (!btn) return;
+      const muted = partnerId && (
+        mutedIds.has(partnerId) ||
+        (chats[partnerId] && chats[partnerId].partnerSessionToken && mutedIds.has(chats[partnerId].partnerSessionToken))
+      );
+      btn.title = muted ? 'Unmute this chat' : 'Mute this chat';
+      const span = btn.querySelector('span');
+      if (span) span.textContent = muted ? 'Unmute' : 'Mute';
+      btn.classList.toggle('text-amber-600', !!muted);
     }
 
     function updateChatLimitStatus() {
@@ -2871,6 +3849,8 @@
         city: city,
         location: location,
         whatsOnMind: whatsOnMind,
+        interests: selectedInterests.slice(0, 5),
+        relationshipStatus: selectedRelationshipStatus || null,
         image: image,
         preference: 'anyone',
         agreedToTerms: agreedToTerms,
@@ -3151,6 +4131,18 @@
             // Replace login UI completely with chat hub
             showScreen('hub');
             saveSession();
+            // Re-bind email account to new session token (for friends)
+            if (s && s.connected && accountEmailCache && accountPasswordCache) {
+              s.emit('account-login', {
+                email: accountEmailCache,
+                password: accountPasswordCache
+              }, (res) => {
+                if (res && res.ok) {
+                  myAccount = res.account;
+                  updateAccountBtnLabel();
+                }
+              });
+            }
             if (s && s.connected) {
               s.emit('request-online-users');
               // Ask server to re-flush any messages queued while we were away
@@ -3244,19 +4236,6 @@
       }
 
       // Set up gender filter buttons (colorful active states)
-      const applyGenderFilterActive = (btn) => {
-        const group = btn.parentElement;
-        if (!group) return;
-        group.querySelectorAll('.gender-filter-btn').forEach(b => {
-          b.classList.remove('is-active-all', 'is-active-male', 'is-active-female', 'bg-blue-600', 'text-white');
-          b.classList.add('border', 'border-gray-300');
-        });
-        btn.classList.remove('border', 'border-gray-300');
-        const g = btn.dataset.gender;
-        if (g === 'male') btn.classList.add('is-active-male');
-        else if (g === 'female') btn.classList.add('is-active-female');
-        else btn.classList.add('is-active-all');
-      };
       const setupGenderFilters = () => {
         const genderBtns = document.querySelectorAll('.gender-filter-btn');
         genderBtns.forEach(btn => {
@@ -3267,6 +4246,12 @@
         });
       };
       setupGenderFilters();
+
+      // Reset all filters to defaults
+      const resetFiltersBtn = document.getElementById('reset-filters-btn');
+      if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', () => resetFilters());
+      }
 
       // Age filters + new sidebar location selects (support)
       ['age-min', 'age-max', 'sidebar-age-min', 'sidebar-age-max', 'sidebar-country-filter', 'sidebar-city-filter'].forEach(id => {
@@ -3357,19 +4342,36 @@
           }
 
           const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          // Same id on sender + receiver so reactions sync
+          const localMsgId = newClientMsgId();
+          const replyPayload = pendingReply
+            ? { msgId: pendingReply.msgId, text: pendingReply.text, username: pendingReply.username }
+            : null;
 
           // Instant UI for sender
           if (chatState) {
-            chatState.messages.push({ text: val, fromSelf: true, time });
+            chatState.messages.push({
+              text: val,
+              fromSelf: true,
+              time,
+              msgId: localMsgId,
+              replyTo: replyPayload
+            });
             chatState.consecutiveSent = (chatState.consecutiveSent || 0) + 1;
             chatState.lastMessageTs = Date.now();
           }
-          addMessageToChatEl(val, true, time);
+          addMessageToChatEl(val, true, time, { msgId: localMsgId, replyTo: replyPayload });
 
           updateChatLimitStatus();
 
-          socket.emit('send-message-to', { targetId: activeChatId, text: val });
+          socket.emit('send-message-to', {
+            targetId: activeChatId,
+            text: val,
+            replyTo: replyPayload,
+            msgId: localMsgId
+          });
           multiChatInput.value = '';
+          clearPendingReply();
           saveSession();
           renderSidebarUsers(); // bump recency in list
         });
@@ -3394,13 +4396,275 @@
       if (blockBtn) {
         blockBtn.addEventListener('click', () => {
           if (!activeChatId || !socket) return;
-          if (!confirm('Block this user? You will not be able to chat with them again in this session.')) return;
-          socket.emit('block-user', { targetId: activeChatId });
+          if (!confirm('Block this user? You will not see them online or be able to message them.')) return;
+          const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+          blockedIds.add(activeChatId);
+          if (partnerTok) blockedIds.add(partnerTok);
+          socket.emit('block-user', {
+            targetId: activeChatId,
+            targetSessionToken: partnerTok || null
+          });
           if (chats[activeChatId]) delete chats[activeChatId];
           closeCurrentChat();
           renderSidebarUsers();
         });
       }
+
+      const addFriendBtn = document.getElementById('add-friend-btn');
+      if (addFriendBtn) {
+        addFriendBtn.addEventListener('click', () => {
+          if (!activeChatId || !socket) return;
+          if (!myAccount || !myAccount.verified) {
+            alert('Register and verify your email first (Account button in the top bar), then try again.');
+            openAccountModal();
+            return;
+          }
+          const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+          const name = (chats[activeChatId] && chats[activeChatId].partnerProfile && chats[activeChatId].partnerProfile.username) || 'this user';
+          if (!confirm('Add ' + name + ' as a friend? They must also have a verified email account.')) return;
+          socket.emit('friend-add', {
+            targetId: activeChatId,
+            targetSessionToken: partnerTok || null
+          }, (res) => {
+            if (!res || !res.ok) {
+              alert((res && res.message) || 'Could not add friend.');
+              return;
+            }
+            myAccount = res.account || myAccount;
+            alert(res.message || 'Friend added!');
+            refreshFriendsListUI();
+            updateAccountBtnLabel();
+          });
+        });
+      }
+
+      const replyCancel = document.getElementById('reply-preview-cancel');
+      if (replyCancel) replyCancel.addEventListener('click', () => clearPendingReply());
+
+      // Account modal
+      setupAccountModal();
+
+      // Interest chips
+      document.querySelectorAll('.interest-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const tag = chip.dataset.interest;
+          if (!tag) return;
+          const idx = selectedInterests.indexOf(tag);
+          if (idx >= 0) {
+            selectedInterests.splice(idx, 1);
+            chip.classList.remove('is-selected');
+          } else {
+            if (selectedInterests.length >= 5) {
+              alert('You can pick up to 5 interests.');
+              return;
+            }
+            selectedInterests.push(tag);
+            chip.classList.add('is-selected');
+          }
+        });
+      });
+
+      // Relationship status (single-select chips)
+      document.querySelectorAll('.status-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const status = chip.dataset.status;
+          if (!status) return;
+          if (selectedRelationshipStatus === status) {
+            // tap again to clear
+            selectedRelationshipStatus = null;
+            chip.classList.remove('is-selected');
+            return;
+          }
+          selectedRelationshipStatus = status;
+          document.querySelectorAll('.status-chip').forEach((c) => c.classList.remove('is-selected'));
+          chip.classList.add('is-selected');
+        });
+      });
+
+      // Mute chat
+      const muteBtn = document.getElementById('mute-chat-btn');
+      if (muteBtn) {
+        muteBtn.addEventListener('click', () => {
+          if (!activeChatId || !socket) return;
+          const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+          const key = partnerTok || activeChatId;
+          const currentlyMuted = mutedIds.has(key) || mutedIds.has(activeChatId);
+          socket.emit('mute-chat', {
+            targetId: activeChatId,
+            targetSessionToken: partnerTok || null,
+            unmute: currentlyMuted
+          }, (res) => {
+            if (currentlyMuted) {
+              mutedIds.delete(key);
+              mutedIds.delete(activeChatId);
+            } else {
+              mutedIds.add(key);
+              mutedIds.add(activeChatId);
+            }
+            updateMuteButtonLabel(activeChatId);
+          });
+        });
+      }
+
+      // Report user
+      const reportBtn = document.getElementById('report-user-btn');
+      const reportModal = document.getElementById('report-modal');
+      const reportClose = document.getElementById('report-modal-close');
+      const reportSubmit = document.getElementById('report-submit');
+      if (reportBtn && reportModal) {
+        reportBtn.addEventListener('click', () => {
+          if (!activeChatId) return;
+          reportModal.classList.remove('hidden');
+        });
+      }
+      if (reportClose && reportModal) {
+        reportClose.addEventListener('click', () => reportModal.classList.add('hidden'));
+        reportModal.addEventListener('click', (e) => {
+          if (e.target === reportModal) reportModal.classList.add('hidden');
+        });
+      }
+      if (reportSubmit) {
+        reportSubmit.addEventListener('click', () => {
+          if (!socket || !activeChatId) return;
+          const reason = (document.getElementById('report-reason') || {}).value || 'other';
+          const details = (document.getElementById('report-details') || {}).value || '';
+          const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+          const targetName = chats[activeChatId] && chats[activeChatId].partnerProfile
+            ? chats[activeChatId].partnerProfile.username
+            : null;
+          socket.emit('report-user', {
+            targetId: activeChatId,
+            targetSessionToken: partnerTok,
+            targetName,
+            reason,
+            details
+          }, (res) => {
+            alert((res && res.message) || 'Report submitted.');
+            if (reportModal) reportModal.classList.add('hidden');
+          });
+        });
+      }
+
+      // Invite link
+      const inviteBtn = document.getElementById('invite-btn');
+      if (inviteBtn) {
+        inviteBtn.addEventListener('click', () => {
+          if (!socket) {
+            connectSocket();
+          }
+          if (!socket) return;
+          socket.emit('create-invite', async (res) => {
+            if (!res || !res.ok) {
+              alert('Could not create invite link.');
+              return;
+            }
+            const url = window.location.origin + (res.path || ('/?invite=' + res.code));
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(url);
+                alert('Invite link copied!\n\n' + url);
+              } else {
+                prompt('Copy this invite link:', url);
+              }
+            } catch (e) {
+              prompt('Copy this invite link:', url);
+            }
+          });
+        });
+      }
+
+      // Voice notes — click to start/stop recording
+      const voiceBtn = document.getElementById('voice-note-btn');
+      const voiceStatus = document.getElementById('voice-note-status');
+      if (voiceBtn) {
+        voiceBtn.addEventListener('click', async () => {
+          if (!activeChatId || !socket) {
+            alert('Open a chat first.');
+            return;
+          }
+          if (voiceRecording) {
+            if (voiceRecorder && voiceRecorder.state !== 'inactive') voiceRecorder.stop();
+            return;
+          }
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Voice notes are not supported in this browser.');
+            return;
+          }
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            voiceChunks = [];
+            const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+            voiceRecorder = new MediaRecorder(stream);
+            voiceRecording = true;
+            voiceBtn.classList.add('is-recording');
+            if (voiceStatus) {
+              voiceStatus.classList.remove('hidden');
+              voiceStatus.textContent = 'Recording… tap mic again to send';
+            }
+            voiceRecorder.ondataavailable = (e) => {
+              if (e.data && e.data.size) voiceChunks.push(e.data);
+            };
+            voiceRecorder.onstop = () => {
+              voiceRecording = false;
+              voiceBtn.classList.remove('is-recording');
+              if (voiceStatus) voiceStatus.classList.add('hidden');
+              stream.getTracks().forEach((t) => t.stop());
+              const blob = new Blob(voiceChunks, { type: mime });
+              if (blob.size < 200) return;
+              if (blob.size > 2 * 1024 * 1024) {
+                alert('Voice note too long (max ~2MB).');
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = () => {
+                const attachment = {
+                  data: reader.result,
+                  type: mime,
+                  name: 'voice-note.' + (mime.includes('webm') ? 'webm' : 'm4a')
+                };
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const msgId = newClientMsgId();
+                const chatState = chats[activeChatId];
+                if (chatState) {
+                  chatState.messages.push({ attachment, fromSelf: true, time, msgId });
+                  chatState.consecutiveSent = (chatState.consecutiveSent || 0) + 1;
+                  chatState.lastMessageTs = Date.now();
+                }
+                renderAttachmentInChat(attachment, true, time, { msgId });
+                socket.emit('send-attachment-to', { targetId: activeChatId, attachment, msgId });
+                updateChatLimitStatus();
+                saveSession();
+              };
+              reader.readAsDataURL(blob);
+            };
+            voiceRecorder.start();
+            // Auto-stop after 60s
+            setTimeout(() => {
+              if (voiceRecording && voiceRecorder && voiceRecorder.state !== 'inactive') {
+                voiceRecorder.stop();
+              }
+            }, 60000);
+          } catch (err) {
+            alert('Microphone permission denied or unavailable.');
+            voiceRecording = false;
+            voiceBtn.classList.remove('is-recording');
+          }
+        });
+      }
+
+      // Invite query param banner
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const inviteCode = params.get('invite');
+        if (inviteCode) {
+          const bar = document.createElement('div');
+          bar.id = 'invite-banner';
+          bar.className = 'text-center text-xs py-2 px-3 border-b theme-border theme-text';
+          bar.textContent = 'You opened an invite link (' + inviteCode + '). Complete your profile to start chatting!';
+          const nav = document.querySelector('nav');
+          if (nav && nav.parentNode) nav.parentNode.insertBefore(bar, nav.nextSibling);
+        }
+      } catch (e) { /* ignore */ }
 
       // Attachment support
       const attachBtn = document.getElementById('attach-btn');
@@ -3415,8 +4679,8 @@
             return;
           }
 
-          if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) {
-            alert('Only image and video files are allowed.');
+          if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/')) {
+            alert('Only image, video, or audio files are allowed.');
             attachInput.value = '';
             return;
           }
@@ -3441,17 +4705,19 @@
               type: file.type,
               name: file.name
             };
+            const msgId = newClientMsgId();
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             // Instant preview for sender
             if (chatState) {
-              chatState.messages.push({ attachment, fromSelf: true, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+              chatState.messages.push({ attachment, fromSelf: true, time, msgId });
               chatState.consecutiveSent = (chatState.consecutiveSent || 0) + 1;
               chatState.lastMessageTs = Date.now();
             }
-            renderAttachmentInChat(attachment, true, new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            renderAttachmentInChat(attachment, true, time, { msgId });
 
             updateChatLimitStatus();
 
-            socket.emit('send-attachment-to', { targetId: activeChatId, attachment });
+            socket.emit('send-attachment-to', { targetId: activeChatId, attachment, msgId });
             attachInput.value = '';
             renderSidebarUsers(); // update recency order
           };
