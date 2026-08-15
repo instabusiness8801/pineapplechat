@@ -106,8 +106,19 @@ const required = [
   ['inbox-modal', 'inbox modal'],
   ['pineapplechat-auth', 'account auth persist key'],
   ['people-list', 'registered users list'],
-  ['admin-tab-btn', 'owner admin tab']
+  ['admin-tab-btn', 'owner admin tab'],
+  ['start-members-grid', 'public registered members section'],
+  ['acct-panel-profile', 'member profile editor'],
+  ['member-avatars-male', 'male member avatars'],
+  ['member-avatars-female', 'female member avatars']
 ];
+const maleAvatars = (html.match(/gender: 'male'/g) || []).length;
+const femaleAvatars = (html.match(/gender: 'female'/g) || []).length;
+if (maleAvatars < 5 || femaleAvatars < 5) {
+  console.error('Need at least 5 male and 5 female avatar presets', { maleAvatars, femaleAvatars });
+  process.exit(1);
+}
+console.log('Avatar presets: ' + maleAvatars + ' male, ' + femaleAvatars + ' female');
 for (const [needle, label] of required) {
   if (!html.includes(needle)) {
     console.error('MISSING FEATURE:', label, '(', needle, ')');

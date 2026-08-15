@@ -82,6 +82,11 @@ function normalizeAccount(email, acc) {
       : [],
     blocked: Array.isArray(acc.blocked) ? acc.blocked.map((e) => String(e).toLowerCase()) : [],
     displayName: acc.displayName || null,
+    gender: acc.gender === 'female' ? 'female' : (acc.gender === 'male' ? 'male' : null),
+    country: acc.country || null,
+    city: acc.city || null,
+    interests: Array.isArray(acc.interests) ? acc.interests.slice(0, 5) : [],
+    image: acc.image || null,
     createdAt: acc.createdAt || Date.now(),
     lastLoginAt: acc.lastLoginAt || null,
     lastSeenAt: acc.lastSeenAt || acc.lastLoginAt || null
@@ -129,6 +134,11 @@ function saveAccounts() {
         outgoingRequests: acc.outgoingRequests || [],
         blocked: acc.blocked || [],
         displayName: acc.displayName || null,
+        gender: acc.gender || null,
+        country: acc.country || null,
+        city: acc.city || null,
+        interests: acc.interests || [],
+        image: acc.image || null,
         createdAt: acc.createdAt,
         lastLoginAt: acc.lastLoginAt || null,
         lastSeenAt: acc.lastSeenAt || null
@@ -176,10 +186,32 @@ function saveTokens() {
   }
 }
 
+const MEMBER_INTERESTS = [
+  'Friends', 'Dating', 'Chit Chat',
+  'Music', 'Movies', 'Sports', 'Gaming', 'Travel',
+  'Food', 'Tech', 'Art', 'Books', 'Fitness'
+];
+
+function publicIdOf(email) {
+  return crypto.createHash('sha256').update('pc:' + String(email || '').toLowerCase()).digest('hex').slice(0, 16);
+}
+
 function displayNameOf(acc) {
   if (!acc) return null;
   if (acc.displayName && String(acc.displayName).trim()) return String(acc.displayName).trim().slice(0, 40);
   return acc.email.split('@')[0];
+}
+
+function profileFields(acc) {
+  if (!acc) return {};
+  return {
+    publicId: publicIdOf(acc.email),
+    gender: acc.gender || null,
+    country: acc.country || null,
+    city: acc.city || null,
+    interests: Array.isArray(acc.interests) ? acc.interests.slice(0, 5) : [],
+    image: acc.image || null
+  };
 }
 
 function publicAccount(acc) {
@@ -194,8 +226,81 @@ function publicAccount(acc) {
     displayName: displayNameOf(acc),
     lastLoginAt: acc.lastLoginAt || null,
     lastSeenAt: acc.lastSeenAt || null,
-    isOwner: isOwner(acc.email)
+    isOwner: isOwner(acc.email),
+    ...profileFields(acc)
   };
+}
+
+function getAccountByPublicId(id) {
+  const needle = String(id || '').trim();
+  if (!needle) return null;
+  for (const acc of accounts.values()) {
+    if (publicIdOf(acc.email) === needle) return acc;
+  }
+  return null;
+}
+
+function isAllowedMemberImage(url) {
+  if (!url) return true;
+  const s = String(url);
+  if (s.length > 1.6e6) return false;
+  if (/^https:\/\/api\.dicebear\.com\/9\.x\/[a-z0-9-]+\/png\?/i.test(s) && s.length < 500) return true;
+  if (/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(s)) return true;
+  return false;
+}
+
+function updateMemberProfile(sessionToken, patch) {
+  const acc = getAccountForSession(sessionToken);
+  if (!isActive(acc)) return { ok: false, message: 'Log in first to update your profile.' };
+  if (!patch || typeof patch !== 'object') return { ok: false, message: 'Nothing to update.' };
+
+  if (patch.displayName !== undefined) {
+    const name = String(patch.displayName || '').trim().slice(0, 40);
+    if (!name) return { ok: false, message: 'Display name is required.' };
+    acc.displayName = name;
+  }
+  if (patch.gender !== undefined) {
+    if (patch.gender !== 'male' && patch.gender !== 'female') {
+      return { ok: false, message: 'Please choose male or female.' };
+    }
+    acc.gender = patch.gender;
+  }
+  if (patch.country !== undefined) acc.country = patch.country ? String(patch.country).trim().slice(0, 80) : null;
+  if (patch.city !== undefined) acc.city = patch.city ? String(patch.city).trim().slice(0, 80) : null;
+  if (patch.interests !== undefined) {
+    const allowed = new Set(MEMBER_INTERESTS);
+    acc.interests = (Array.isArray(patch.interests) ? patch.interests : [])
+      .map((t) => String(t || '').trim())
+      .filter((t) => allowed.has(t))
+      .slice(0, 5);
+  }
+  if (patch.image !== undefined) {
+    if (patch.image && !isAllowedMemberImage(patch.image)) {
+      return { ok: false, message: 'Please use a preset avatar or a JPG/PNG/WebP under 1MB.' };
+    }
+    acc.image = patch.image || null;
+  }
+  saveAccounts();
+  return { ok: true, account: publicAccount(acc) };
+}
+
+function listPublicMembers(isEmailOnline) {
+  const users = [];
+  for (const acc of accounts.values()) {
+    if (!isActive(acc)) continue;
+    const presence = typeof isEmailOnline === 'function' ? isEmailOnline(acc.email) : null;
+    users.push({
+      id: publicIdOf(acc.email),
+      displayName: displayNameOf(acc),
+      online: !!(presence && presence.online),
+      away: !!(presence && presence.away),
+      lastSeenAt: acc.lastSeenAt || null,
+      lastLoginAt: acc.lastLoginAt || null,
+      ...profileFields(acc)
+    });
+  }
+  users.sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0) || String(a.displayName).localeCompare(String(b.displayName)));
+  return { ok: true, users, count: users.length };
 }
 
 function createAuthToken(email) {
@@ -663,7 +768,8 @@ function presencePayload(email, isEmailOnline) {
     sessionToken: (presence && presence.sessionToken) || null,
     socketId: (presence && presence.socketId) || null,
     lastLoginAt: acc ? acc.lastLoginAt : null,
-    lastSeenAt: acc ? acc.lastSeenAt : null
+    lastSeenAt: acc ? acc.lastSeenAt : null,
+    ...(acc ? profileFields(acc) : {})
   };
 }
 
@@ -826,7 +932,12 @@ module.exports = {
   listFriendsWithPresence,
   listFriendRequests,
   listRegisteredUsers,
+  listPublicMembers,
   listAllUsersAdmin,
+  updateMemberProfile,
+  getAccountByPublicId,
+  publicIdOf,
+  MEMBER_INTERESTS,
   resendCode,
   publicAccount,
   findSessionTokenForEmail,

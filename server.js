@@ -53,6 +53,17 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+app.get('/api/members', (req, res) => {
+  res.json(accounts.listPublicMembers((email) => {
+    for (const sock of io.sockets.sockets.values()) {
+      if (sock.connected && sock.accountEmail === email) {
+        return { online: true, away: false };
+      }
+    }
+    return null;
+  }));
+});
+
 app.get('/api/invite/:code', (req, res) => {
   const inv = features.getInvite(req.params.code);
   if (!inv) return res.status(404).json({ ok: false, message: 'Invite not found or expired.' });
@@ -606,6 +617,16 @@ io.on('connection', (socket) => {
     if (socket.accountEmail) {
       accounts.bindSession(token, socket.accountEmail);
       accounts.setDisplayName(socket.accountEmail, cleanedProfile.username);
+      const acc = accounts.getAccountByEmail(socket.accountEmail);
+      if (acc && acc.verified) {
+        const patch = {};
+        if (!acc.gender && cleanedProfile.gender) patch.gender = cleanedProfile.gender;
+        if (!acc.country && cleanedProfile.country) patch.country = cleanedProfile.country;
+        if (!acc.city && cleanedProfile.city) patch.city = cleanedProfile.city;
+        if ((!acc.interests || !acc.interests.length) && cleanedProfile.interests) patch.interests = cleanedProfile.interests;
+        if (!acc.image && cleanedProfile.image) patch.image = cleanedProfile.image;
+        if (Object.keys(patch).length) accounts.updateMemberProfile(token, patch);
+      }
     }
 
     socket.emit('profile-accepted', {
@@ -956,6 +977,8 @@ io.on('connection', (socket) => {
       const em = accounts.getEmailForSession(sessionTokenOf(byTok));
       if (em) return em;
     }
+    const byPublic = accounts.getAccountByPublicId(s);
+    if (byPublic) return byPublic.email;
     return accounts.getEmailForSession(s);
   }
 
@@ -1007,6 +1030,7 @@ io.on('connection', (socket) => {
     if (result.ok) {
       bindAccountToSocket(data.email);
       accounts.touchLastLogin(data.email);
+      io.emit('members-changed');
     }
     if (typeof ack === 'function') ack(result);
     else socket.emit('account-result', { action: 'verify', ...result });
@@ -1134,6 +1158,38 @@ io.on('connection', (socket) => {
     ack = pickAck(data, ack);
     const me = requireVerifiedAccount();
     const result = accounts.listRegisteredUsers(me ? me.token : sessionTokenOfSocket(), friendPresenceForEmail);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('members-public', (data, ack) => {
+    ack = pickAck(data, ack);
+    const result = accounts.listPublicMembers(friendPresenceForEmail);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-update-profile', (data, ack) => {
+    const me = requireVerifiedAccount();
+    if (!me) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Log in first.' });
+      return;
+    }
+    const patch = data || {};
+    if ((patch.country || patch.city) && !isValidLocation(patch.country, patch.city)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Please pick a valid country and city from the list.' });
+      return;
+    }
+    if (patch.displayName) {
+      const nameCheck = safety.validateUsername(patch.displayName);
+      if (!nameCheck.ok) {
+        if (typeof ack === 'function') ack({ ok: false, message: nameCheck.message || 'Invalid name.' });
+        return;
+      }
+      patch.displayName = nameCheck.text;
+    }
+    const result = accounts.updateMemberProfile(me.token, patch);
+    if (result.ok) {
+      io.emit('members-changed');
+    }
     if (typeof ack === 'function') ack(result);
   });
 

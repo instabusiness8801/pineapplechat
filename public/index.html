@@ -582,8 +582,14 @@
       .page-wrap { padding: 1.5rem 1.25rem; }
     }
 
-    /* Start / login: stack on small screens, form first */
+    /* Start / login: members first, then form + live list */
     #start-screen {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+    }
+    #start-main {
       display: flex;
       flex-direction: column-reverse;
       gap: 1rem;
@@ -601,11 +607,21 @@
     #start-online-list {
       max-height: 220px;
     }
+    #start-members-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.5rem;
+      max-height: 280px;
+      overflow: auto;
+    }
+    @media (min-width: 640px) {
+      #start-members-grid { grid-template-columns: 1fr 1fr; max-height: 320px; }
+    }
     @media (min-width: 768px) {
       #start-online-list { max-height: 320px; }
     }
     @media (min-width: 1024px) {
-      #start-screen {
+      #start-main {
         flex-direction: row;
         gap: 1.5rem;
         align-items: flex-start;
@@ -616,6 +632,19 @@
         top: 5rem;
       }
       #start-online-list { max-height: 420px; }
+      #start-members-grid { grid-template-columns: repeat(3, 1fr); max-height: 360px; }
+    }
+    .member-card-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #eee;
+    }
+    .acct-avatar-btn.is-selected {
+      outline: 2px solid var(--pine-leaf, #2d8a4e);
+      outline-offset: 2px;
     }
 
     /* Profile form card padding on small screens */
@@ -1022,7 +1051,17 @@
     
     <!-- PROFILE / START SCREEN: form first on mobile, side-by-side on desktop -->
     <div id="start-screen" class="screen max-w-6xl mx-auto">
-      
+
+      <section id="start-members-section" class="surface-card card-teal rounded-2xl sm:rounded-3xl p-3 sm:p-4">
+        <div class="flex items-center justify-between mb-2 gap-2">
+          <h3 class="font-semibold text-sm theme-text-strong">Registered members</h3>
+          <span id="start-members-count" class="text-[10px] px-2 py-0.5 rounded-full chip-green font-medium">0</span>
+        </div>
+        <p class="text-[10px] theme-muted mb-2">Browse members even if nobody is in quick chat. Register or log in to message them.</p>
+        <div id="start-members-grid"></div>
+      </section>
+
+      <div id="start-main">
       <!-- Online users list -->
       <div class="start-online-col">
         <div class="surface-card card-teal rounded-2xl sm:rounded-3xl p-3 sm:p-4">
@@ -1217,6 +1256,7 @@
             <p class="text-center text-[10px] theme-muted">Be respectful. Report or block unsafe behaviour. 18+ only.</p>
           </form>
         </div>
+      </div>
       </div>
 
     </div>
@@ -1417,13 +1457,38 @@
           <span id="owner-badge" class="hidden text-[10px] ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">Owner</span>
         </div>
         <div class="flex flex-wrap gap-1 text-[11px]" id="account-tabs">
-          <button type="button" data-acct-tab="friends" class="acct-tab px-2.5 py-1 rounded-lg border theme-border is-active-acct">Friends</button>
+          <button type="button" data-acct-tab="profile" class="acct-tab px-2.5 py-1 rounded-lg border theme-border is-active-acct">Profile</button>
+          <button type="button" data-acct-tab="friends" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Friends</button>
           <button type="button" data-acct-tab="people" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">People</button>
           <button type="button" data-acct-tab="requests" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Requests <span id="request-badge" class="hidden nav-unread-badge align-middle">0</span></button>
           <button type="button" data-acct-tab="blocked" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Blocked</button>
           <button type="button" data-acct-tab="admin" id="admin-tab-btn" class="acct-tab hidden px-2.5 py-1 rounded-lg border theme-border">Admin</button>
         </div>
-        <div id="acct-panel-friends" class="acct-panel">
+        <div id="acct-panel-profile" class="acct-panel space-y-2">
+          <p class="text-[10px] theme-muted">This is what other members see. Pick an avatar or upload a photo.</p>
+          <input id="member-display-name" type="text" maxlength="24" placeholder="Display name" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <div class="flex gap-2">
+            <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="male" class="mr-1"> Male</label>
+            <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="female" class="mr-1"> Female</label>
+          </div>
+          <div class="text-[11px] font-semibold theme-text-strong">Male avatars</div>
+          <div id="member-avatars-male" class="flex flex-wrap gap-1.5"></div>
+          <div class="text-[11px] font-semibold theme-text-strong">Female avatars</div>
+          <div id="member-avatars-female" class="flex flex-wrap gap-1.5"></div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="member-photo-btn" class="text-[11px] px-2 py-1 rounded-lg border theme-border">Upload photo</button>
+            <input id="member-photo-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
+            <span id="member-photo-hint" class="text-[10px] theme-muted">JPG, PNG or WebP · Max 1MB</span>
+          </div>
+          <input id="member-country" type="text" placeholder="Country" list="country-datalist" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
+          <input id="member-city" type="text" placeholder="City" list="member-city-datalist" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
+          <datalist id="member-city-datalist"></datalist>
+          <div class="text-[11px] font-semibold theme-text-strong">Interests (up to 5)</div>
+          <div id="member-interest-chips" class="flex flex-wrap gap-1"></div>
+          <button type="button" id="member-profile-save" class="w-full btn-primary-g py-2 rounded-xl text-sm">Save profile</button>
+          <div id="member-profile-status" class="text-[11px] theme-muted"></div>
+        </div>
+        <div id="acct-panel-friends" class="acct-panel hidden">
           <div class="text-xs font-semibold theme-text-strong mb-1">Friends <span class="font-normal theme-muted">(online first)</span></div>
           <ul id="friends-list" class="text-xs space-y-1 theme-muted max-h-52 overflow-y-auto"></ul>
           <p class="text-[10px] theme-muted mt-1">Send a friend request from People, or tap <strong>Friend</strong> in a live chat. Inbox messages stay even if they are offline.</p>
@@ -1591,37 +1656,45 @@
     const AVATAR_PRESETS = [
       // Male (clear masculine presentation)
       {
-        id: 'kai', label: 'Kai',
+        id: 'kai', label: 'Kai', gender: 'male',
         url: 'https://api.dicebear.com/9.x/adventurer/png?seed=James&gender=male&size=128&backgroundColor=b6e3f4'
       },
       {
-        id: 'leo', label: 'Leo',
+        id: 'leo', label: 'Leo', gender: 'male',
         url: 'https://api.dicebear.com/9.x/avataaars/png?seed=Marcus&gender=male&facialHairProbability=100&facialHair=beardLight&size=128&backgroundColor=c0aede'
       },
       {
-        id: 'noah', label: 'Noah',
+        id: 'noah', label: 'Noah', gender: 'male',
         url: 'https://api.dicebear.com/9.x/adventurer/png?seed=Daniel&gender=male&size=128&backgroundColor=d1d4f9'
       },
       {
-        id: 'rex', label: 'Rex',
+        id: 'rex', label: 'Rex', gender: 'male',
         url: 'https://api.dicebear.com/9.x/avataaars/png?seed=Ryan&gender=male&facialHairProbability=100&facialHair=beardMedium&top=shortFlat&size=128&backgroundColor=b6e3f4'
+      },
+      {
+        id: 'cole', label: 'Cole', gender: 'male',
+        url: 'https://api.dicebear.com/9.x/adventurer/png?seed=Cole&gender=male&size=128&backgroundColor=c0aede'
       },
       // Female (clear feminine presentation)
       {
-        id: 'luna', label: 'Luna',
+        id: 'luna', label: 'Luna', gender: 'female',
         url: 'https://api.dicebear.com/9.x/lorelei/png?seed=Sophia&gender=female&size=128&backgroundColor=ffdfbf'
       },
       {
-        id: 'aria', label: 'Aria',
+        id: 'aria', label: 'Aria', gender: 'female',
         url: 'https://api.dicebear.com/9.x/lorelei/png?seed=Emma&gender=female&size=128&backgroundColor=ffd5dc'
       },
       {
-        id: 'mia', label: 'Mia',
+        id: 'mia', label: 'Mia', gender: 'female',
         url: 'https://api.dicebear.com/9.x/avataaars/png?seed=Olivia&gender=female&top=longStraight&size=128&backgroundColor=c0aede'
       },
       {
-        id: 'zara', label: 'Zara',
+        id: 'zara', label: 'Zara', gender: 'female',
         url: 'https://api.dicebear.com/9.x/adventurer/png?seed=Isabella&gender=female&size=128&backgroundColor=ffdfbf'
+      },
+      {
+        id: 'nina', label: 'Nina', gender: 'female',
+        url: 'https://api.dicebear.com/9.x/lorelei/png?seed=Ava&gender=female&size=128&backgroundColor=c0aede'
       },
       // Unisex cartoons
       {
@@ -2316,6 +2389,7 @@
         }
         socket.emit('request-online-users');
         restoreAccountSession();
+        loadPublicMembers();
       });
 
       socket.on('disconnect', (reason) => {
@@ -2333,6 +2407,7 @@
         }
         socket.emit('request-online-users');
         restoreAccountSession();
+        loadPublicMembers();
       });
 
       socket.on('logged-out', () => {
@@ -2521,6 +2596,8 @@
         if (info && info.targetSessionToken) blockedIds.add(info.targetSessionToken);
         renderSidebarUsers();
       });
+
+      socket.on('members-changed', () => loadPublicMembers());
 
       socket.on('friend-added', (info) => {
         if (info && info.message) {
@@ -2814,10 +2891,204 @@
       return item.displayName || item.username || item.email || 'User';
     }
 
-    function openInboxWith(email) {
-      if (!email) return;
+    function openInboxWith(emailOrId) {
+      if (!emailOrId) return;
+      if (!myAccount || !myAccount.verified) {
+        openAccountModal();
+        setAuthStatus('Register or log in to message members.', true);
+        return;
+      }
       closeAccountModal();
-      openInboxModal(email);
+      openInboxModal(emailOrId);
+    }
+
+    const MEMBER_INTEREST_TAGS = [
+      'Friends', 'Dating', 'Chit Chat', 'Music', 'Movies', 'Sports', 'Gaming',
+      'Travel', 'Food', 'Tech', 'Art', 'Books', 'Fitness'
+    ];
+    let memberImageDraft = null;
+    let memberInterestsDraft = [];
+
+    function genderedAvatars(gender) {
+      return AVATAR_PRESETS.filter((p) => p.gender === gender);
+    }
+
+    function defaultMemberAvatar(gender) {
+      const list = genderedAvatars(gender || 'male');
+      return (list[0] && list[0].url) || '';
+    }
+
+    function renderStartMembers(users) {
+      const grid = document.getElementById('start-members-grid');
+      const countEl = document.getElementById('start-members-count');
+      if (countEl) countEl.textContent = String((users && users.length) || 0);
+      if (!grid) return;
+      grid.innerHTML = '';
+      if (!users || !users.length) {
+        grid.innerHTML = '<div class="text-[11px] theme-muted text-center py-4 px-2 col-span-full">No registered members yet. Create an account to be the first.</div>';
+        return;
+      }
+      users.forEach((u) => grid.appendChild(buildMemberCard(u)));
+    }
+
+    function buildMemberCard(u) {
+      const card = document.createElement('div');
+      card.className = 'border theme-border rounded-xl p-2 flex items-start gap-2';
+      const img = u.image || defaultMemberAvatar(u.gender);
+      const loc = formatLocationWithFlagHtml({ city: u.city, country: u.country });
+      const interests = (u.interests || []).slice(0, 5).map((t) => escapeHtml(t)).join(' · ');
+      const genderLabel = u.gender === 'female' ? 'Female' : (u.gender === 'male' ? 'Male' : '—');
+      card.innerHTML =
+        '<img src="' + escapeHtml(img) + '" alt="" class="member-card-avatar">' +
+        '<div class="min-w-0 flex-1">' +
+          '<div class="text-xs font-semibold theme-text-strong truncate">' + escapeHtml(u.displayName || 'Member') +
+            ' <span class="' + (u.online ? 'text-emerald-600' : 'theme-muted') + ' font-normal">' + (u.online ? 'online' : 'offline') + '</span></div>' +
+          '<div class="text-[10px] theme-muted">' + escapeHtml(genderLabel) + (loc ? ' · ' + loc : '') + '</div>' +
+          (interests ? '<div class="text-[10px] theme-muted truncate">' + interests + '</div>' : '') +
+          '<button type="button" class="member-msg-btn mt-1 text-[10px] px-2 py-0.5 rounded border theme-border">Message</button>' +
+        '</div>';
+      const btn = card.querySelector('.member-msg-btn');
+      if (btn) {
+        btn.addEventListener('click', () => openInboxWith(u.email || u.id || u.publicId));
+      }
+      return card;
+    }
+
+    function loadPublicMembers() {
+      fetch('/api/members')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && data.ok) renderStartMembers(data.users);
+        })
+        .catch(() => {});
+    }
+
+    function fillMemberCityList(country) {
+      const list = document.getElementById('member-city-datalist');
+      if (!list) return;
+      list.innerHTML = '';
+      const locs = (typeof getWorldLocations === 'function' ? getWorldLocations() : window.WORLD_LOCATIONS) || {};
+      const cities = locs[country] || [];
+      cities.forEach((c) => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        list.appendChild(opt);
+      });
+    }
+
+    function fillMemberProfileForm() {
+      if (!myAccount) return;
+      memberImageDraft = myAccount.image || null;
+      memberInterestsDraft = Array.isArray(myAccount.interests) ? myAccount.interests.slice() : [];
+      const nameEl = document.getElementById('member-display-name');
+      if (nameEl) nameEl.value = myAccount.displayName || (myAccount.email && myAccount.email.split('@')[0]) || '';
+      document.querySelectorAll('input[name="member-gender"]').forEach((r) => {
+        r.checked = r.value === myAccount.gender;
+      });
+      const countryEl = document.getElementById('member-country');
+      const cityEl = document.getElementById('member-city');
+      if (countryEl) countryEl.value = myAccount.country || '';
+      if (cityEl) cityEl.value = myAccount.city || '';
+      fillMemberCityList(myAccount.country || '');
+      renderMemberAvatarPickers();
+      renderMemberInterestChips();
+    }
+
+    function renderMemberAvatarPickers() {
+      ['male', 'female'].forEach((g) => {
+        const box = document.getElementById('member-avatars-' + g);
+        if (!box) return;
+        box.innerHTML = '';
+        genderedAvatars(g).forEach((preset) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'acct-avatar-btn rounded-full p-0.5' + (memberImageDraft === preset.url ? ' is-selected' : '');
+          btn.title = preset.label;
+          btn.innerHTML = '<img src="' + escapeHtml(preset.url) + '" alt="' + escapeHtml(preset.label) + '" class="w-9 h-9 rounded-full object-cover">';
+          btn.addEventListener('click', () => {
+            memberImageDraft = preset.url;
+            const genderRadio = document.querySelector('input[name="member-gender"][value="' + g + '"]');
+            if (genderRadio) genderRadio.checked = true;
+            renderMemberAvatarPickers();
+          });
+          box.appendChild(btn);
+        });
+      });
+    }
+
+    function renderMemberInterestChips() {
+      const box = document.getElementById('member-interest-chips');
+      if (!box) return;
+      box.innerHTML = '';
+      MEMBER_INTEREST_TAGS.forEach((tag) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'interest-chip px-2 py-0.5 rounded-full border theme-border text-[10px]' + (memberInterestsDraft.indexOf(tag) >= 0 ? ' is-selected' : '');
+        b.textContent = tag;
+        b.addEventListener('click', () => {
+          const i = memberInterestsDraft.indexOf(tag);
+          if (i >= 0) memberInterestsDraft.splice(i, 1);
+          else if (memberInterestsDraft.length < 5) memberInterestsDraft.push(tag);
+          renderMemberInterestChips();
+        });
+        box.appendChild(b);
+      });
+    }
+
+    function setupMemberProfileEditor() {
+      const saveBtn = document.getElementById('member-profile-save');
+      const photoBtn = document.getElementById('member-photo-btn');
+      const photoInput = document.getElementById('member-photo-input');
+      const countryEl = document.getElementById('member-country');
+      if (countryEl) {
+        countryEl.addEventListener('change', () => fillMemberCityList(countryEl.value));
+        countryEl.addEventListener('blur', () => fillMemberCityList(countryEl.value));
+      }
+      if (photoBtn && photoInput) {
+        photoBtn.addEventListener('click', () => photoInput.click());
+        photoInput.addEventListener('change', () => {
+          const file = photoInput.files && photoInput.files[0];
+          if (!file) return;
+          if (file.size > 1024 * 1024) {
+            alert('Photo must be 1MB or smaller.');
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            memberImageDraft = String(reader.result || '');
+            renderMemberAvatarPickers();
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+      if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+          if (!socket) connectSocket();
+          const genderEl = document.querySelector('input[name="member-gender"]:checked');
+          const payload = {
+            displayName: (document.getElementById('member-display-name') || {}).value,
+            gender: genderEl ? genderEl.value : null,
+            country: (document.getElementById('member-country') || {}).value,
+            city: (document.getElementById('member-city') || {}).value,
+            interests: memberInterestsDraft.slice(),
+            image: memberImageDraft
+          };
+          const status = document.getElementById('member-profile-status');
+          const send = () => socket.emit('account-update-profile', payload, (res) => {
+            if (status) {
+              status.textContent = (res && res.message) || (res && res.ok ? 'Profile saved.' : 'Could not save.');
+              status.style.color = res && res.ok ? '' : '#dc2626';
+            }
+            if (res && res.ok && res.account) {
+              myAccount = res.account;
+              if (!res.message && status) status.textContent = 'Profile saved.';
+              loadPublicMembers();
+            }
+          });
+          if (socket.connected) send();
+          else socket.once('connect', send);
+        });
+      }
     }
 
     function refreshFriendsListUI(friendsPayload) {
@@ -2923,6 +3194,7 @@
       document.querySelectorAll('.acct-panel').forEach((p) => p.classList.add('hidden'));
       const panel = document.getElementById('acct-panel-' + tab);
       if (panel) panel.classList.remove('hidden');
+      if (tab === 'profile') fillMemberProfileForm();
       if (tab === 'people') refreshPeopleUI();
       if (tab === 'requests') refreshRequestsUI();
       if (tab === 'admin') refreshAdminUI();
@@ -2955,8 +3227,14 @@
         const left = document.createElement('div');
         left.className = 'min-w-0';
         const ownerMark = u.isOwner ? ' · owner' : '';
-        left.innerHTML = `<div class="truncate"><span class="${u.online ? 'friend-online-dot' : 'friend-offline-dot'}"></span>${escapeHtml(personLabel(u))}${u.isFriend ? ' <span class="text-emerald-600">friend</span>' : ''}${escapeHtml(ownerMark)}</div>
-          <div class="text-[10px] theme-muted">${escapeHtml(formatLastSeen(u.lastSeenAt || u.lastLoginAt, u.online, u.away))}</div>`;
+        const locBits = [u.city, u.country].filter(Boolean).join(', ');
+        const avatar = u.image
+          ? '<img src="' + escapeHtml(u.image) + '" class="w-7 h-7 rounded-full object-cover flex-shrink-0" alt="">'
+          : '';
+        left.innerHTML = avatar + `<div class="min-w-0"><div class="truncate"><span class="${u.online ? 'friend-online-dot' : 'friend-offline-dot'}"></span>${escapeHtml(personLabel(u))}${u.isFriend ? ' <span class="text-emerald-600">friend</span>' : ''}${escapeHtml(ownerMark)}</div>
+          <div class="text-[10px] theme-muted">${escapeHtml((u.gender || '') + (locBits ? ' · ' + locBits : ''))}</div>
+          <div class="text-[10px] theme-muted">${escapeHtml(formatLastSeen(u.lastSeenAt || u.lastLoginAt, u.online, u.away))}</div></div>`;
+        left.className = 'min-w-0 flex items-start gap-2';
         const actions = document.createElement('div');
         actions.className = 'flex gap-1 flex-shrink-0';
         if (!u.isFriend && !u.requestOutgoing && !u.requestIncoming) {
@@ -3158,7 +3436,7 @@
         refreshFriendsListUI();
         refreshBlockedListUI();
         refreshAccountLists();
-        switchAcctTab(tab || 'friends');
+        switchAcctTab(tab || 'profile');
       } else {
         if (loggedOut) loggedOut.classList.remove('hidden');
         if (loggedIn) loggedIn.classList.add('hidden');
@@ -3310,7 +3588,7 @@
             }
             setAuthStatus(res.message || 'Verified! Your account is created.');
             showAuthDevCode(null);
-            openAccountModal();
+            openAccountModal('profile');
           });
         });
       }
@@ -3349,6 +3627,8 @@
       });
       const peopleSearch = document.getElementById('people-search');
       if (peopleSearch) peopleSearch.addEventListener('input', () => renderPeopleList());
+
+      setupMemberProfileEditor();
 
       const membersBtn = document.getElementById('members-btn');
       if (membersBtn) {
@@ -5693,6 +5973,7 @@
       populateAgeDropdown();
       initUI();
       initLocationDropdowns(true);
+      loadPublicMembers();
 
       // Restore session if refreshed within grace window (default 15 min)
       const saved = loadSession();
