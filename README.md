@@ -31,8 +31,8 @@ By default **demo users are off** (correct for production).
    - **Plan:** Free is fine to start
 4. Environment variables:
    - `ENABLE_DEMO_USERS` = `false` (or leave unset)
-   - `RESEND_API_KEY` = your Resend API key (**required** so verification codes are emailed)
-   - `EMAIL_FROM` = e.g. `PineappleChat <onboarding@resend.dev>`
+   - `BREVO_API_KEY` = Brevo API key (recommended on **Render free** — Gmail SMTP is blocked there)
+   - `EMAIL_FROM` = e.g. `PineappleChat <instabusiness8801@gmail.com>` (must be a verified Brevo sender)
    - `OWNER_EMAIL` = your login email (sees every member, unlimited inbox messages)
    - Do **not** set `PORT` — Render sets it automatically
 5. Deploy → open the URL Render gives you (e.g. `https://your-app.onrender.com`)

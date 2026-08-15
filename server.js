@@ -992,7 +992,7 @@ io.on('connection', (socket) => {
   }
 
   socket.on('account-register', async (data, ack) => {
-    const rl = features.rateLimit('reg:' + (socket.handshake.address || socket.id), 8, 15 * 60 * 1000);
+    const rl = features.rateLimit('reg:' + (socket.handshake.address || socket.id), 15, 15 * 60 * 1000);
     if (!rl.ok) {
       if (typeof ack === 'function') ack(rl);
       return;

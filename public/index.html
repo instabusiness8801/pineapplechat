@@ -3216,10 +3216,22 @@
       const regSubmit = document.getElementById('reg-submit');
       if (regSubmit) {
         regSubmit.addEventListener('click', () => {
-          if (!socket) connectSocket();
           const email = (document.getElementById('reg-email') || {}).value;
           const password = (document.getElementById('reg-password') || {}).value;
-          socket.emit('account-register', { email, password }, (res) => {
+          if (!email || !password) {
+            setAuthStatus('Enter email and password first.', true);
+            return;
+          }
+          regSubmit.disabled = true;
+          const prevLabel = regSubmit.textContent;
+          regSubmit.textContent = 'Sending code…';
+          setAuthStatus('Sending verification code. Please wait…');
+          let settled = false;
+          const finish = (res) => {
+            if (settled) return;
+            settled = true;
+            regSubmit.disabled = false;
+            regSubmit.textContent = prevLabel;
             if (!res || !res.ok) {
               setAuthStatus((res && res.message) || 'Registration failed', true);
               return;
@@ -3231,7 +3243,19 @@
             const ve = document.getElementById('verify-email');
             if (ve) ve.value = email;
             switchAuthTab('verify');
-          });
+          };
+          if (!socket) connectSocket();
+          const send = () => socket.emit('account-register', { email, password }, finish);
+          if (socket.connected) send();
+          else socket.once('connect', send);
+          setTimeout(() => {
+            if (!settled) {
+              finish({
+                ok: false,
+                message: 'The server took too long. Render free plans block Gmail SMTP — add a BREVO_API_KEY instead.'
+              });
+            }
+          }, 20000);
         });
       }
 

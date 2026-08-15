@@ -55,8 +55,12 @@ function smtpConfigured() {
   );
 }
 
+function brevoKey() {
+  return process.env.BREVO_API_KEY || process.env.SENDINBLUE_API_KEY || '';
+}
+
 function emailConfigured() {
-  return !!(resendKey() || smtpConfigured());
+  return !!(resendKey() || brevoKey() || smtpConfigured());
 }
 
 function allowDevCodes() {
@@ -68,9 +72,36 @@ function fromAddress() {
 }
 
 function mailStatus() {
+  if (brevoKey()) return { configured: true, provider: 'brevo' };
   if (resendKey()) return { configured: true, provider: 'resend' };
   if (smtpConfigured()) return { configured: true, provider: 'smtp' };
   return { configured: false, provider: allowDevCodes() ? 'dev' : 'none' };
+}
+
+function parseFromAddress() {
+  const raw = fromAddress();
+  const m = String(raw).match(/^(.*)<([^>]+)>$/);
+  if (m) {
+    return { name: m[1].trim().replace(/^"|"$/g, '') || 'PineappleChat', email: m[2].trim() };
+  }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(raw).trim())) {
+    return { name: 'PineappleChat', email: String(raw).trim() };
+  }
+  return { name: 'PineappleChat', email: process.env.SMTP_USER || process.env.BREVO_SENDER_EMAIL || '' };
+}
+
+function formatMailError(err) {
+  const s = String(err || '');
+  if (/ETIMEDOUT|ECONNECTION|ENOTFOUND|timeout|Greeting never received|EHOSTUNREACH|blocked/i.test(s)) {
+    return 'Could not reach the mail server. Render free plans block Gmail SMTP (ports 465/587). Use a BREVO_API_KEY instead, or upgrade the Render instance.';
+  }
+  if (/Invalid login|Username and Password|EAUTH|535|Application-specific password/i.test(s)) {
+    return 'Gmail rejected the SMTP login. Check SMTP_USER and the 16-character App Password (spaces removed).';
+  }
+  if (/email-not-configured|no-smtp|no-resend/i.test(s) || !s) {
+    return 'Email is not configured on the server. On Render free, set BREVO_API_KEY (HTTPS). Gmail SMTP will not work on the free plan.';
+  }
+  return 'Could not send the verification email. ' + s.replace(/\s+/g, ' ').slice(0, 180);
 }
 
 async function sendViaResend({ to, subject, text, html }) {
@@ -92,15 +123,49 @@ async function sendViaResend({ to, subject, text, html }) {
   return { ok: true, sent: true, provider: 'resend' };
 }
 
+async function sendViaBrevo({ to, subject, text, html }) {
+  const apiKey = brevoKey();
+  if (!apiKey) return { ok: false, sent: false, error: 'no-brevo-key' };
+  const sender = parseFromAddress();
+  if (process.env.BREVO_SENDER_EMAIL) sender.email = process.env.BREVO_SENDER_EMAIL;
+  if (!sender.email) {
+    return { ok: false, sent: false, error: 'Set EMAIL_FROM or BREVO_SENDER_EMAIL to your verified Brevo sender.' };
+  }
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: sender.name || 'PineappleChat', email: sender.email },
+      to: [{ email: to }],
+      subject,
+      textContent: text,
+      htmlContent: html
+    })
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    console.warn('[mail] Brevo failed:', res.status, body);
+    return { ok: false, sent: false, error: body };
+  }
+  return { ok: true, sent: true, provider: 'brevo' };
+}
+
 async function sendViaSmtp({ to, subject, text, html }) {
   if (!smtpConfigured()) return { ok: false, sent: false, error: 'no-smtp' };
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: Number(process.env.SMTP_PORT || 587),
     secure: process.env.SMTP_SECURE === 'true',
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 12000,
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
+      pass: String(process.env.SMTP_PASS || '').replace(/\s+/g, '')
     }
   });
   await transporter.sendMail({
@@ -115,6 +180,20 @@ async function sendViaSmtp({ to, subject, text, html }) {
 
 async function sendEmail({ to, subject, text, html }) {
   const errors = [];
+  // HTTPS first — Render free blocks outbound SMTP (25/465/587)
+  if (brevoKey()) {
+    try {
+      const r = await sendViaBrevo({ to, subject, text, html });
+      if (r.sent) {
+        console.log(`[mail] sent via Brevo to ${to} (${subject})`);
+        return r;
+      }
+      errors.push(r.error || 'brevo-failed');
+    } catch (e) {
+      errors.push(e.message);
+      console.warn('[mail] Brevo error:', e.message);
+    }
+  }
   if (resendKey()) {
     try {
       const r = await sendViaResend({ to, subject, text, html });
@@ -195,5 +274,6 @@ module.exports = {
   emailConfigured,
   allowDevCodes,
   mailStatus,
+  formatMailError,
   loadDotEnv
 };

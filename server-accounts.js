@@ -259,8 +259,7 @@ async function deliverCode(email, code) {
   return {
     ok: false,
     sent: false,
-    message:
-      'Could not send the verification email. The site owner needs to set RESEND_API_KEY (or SMTP) on the server.',
+    message: mail.formatMailError(send.error),
     error: send.error
   };
 }
