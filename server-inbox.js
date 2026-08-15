@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DATA_DIR = path.join(__dirname, 'data');
+const { DATA_DIR, ensureDataDir } = require(path.join(__dirname, 'data-dir.js'));
 const INBOX_FILE = path.join(DATA_DIR, 'inbox.json');
 const LIMIT = 5;
 const RESET_MS = 48 * 60 * 60 * 1000;
@@ -55,9 +55,18 @@ function saveNow() {
       JSON.stringify({ threads: store.threads, notifyAt: store.notifyAt }, null, 2),
       'utf8'
     );
+    try {
+      require(path.join(__dirname, 'data-backup.js')).schedulePush();
+    } catch (e) { /* ignore */ }
   } catch (e) {
     console.warn('[inbox] save failed:', e.message);
   }
+}
+
+function reload() {
+  store.threads = {};
+  store.notifyAt = {};
+  load();
 }
 
 function pairKey(a, b) {
@@ -314,5 +323,6 @@ module.exports = {
   limitStatus,
   pairKey,
   shouldEmailNotify,
-  unansweredFrom
+  unansweredFrom,
+  reload
 };

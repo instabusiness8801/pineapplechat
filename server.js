@@ -7,6 +7,7 @@ const vm = require('vm');
 const crypto = require('crypto');
 const safety = require(path.join(__dirname, 'public', 'content-safety.js'));
 const mail = require(path.join(__dirname, 'server-mail.js'));
+const backup = require(path.join(__dirname, 'data-backup.js'));
 const accounts = require(path.join(__dirname, 'server-accounts.js'));
 const features = require(path.join(__dirname, 'server-features.js'));
 const inbox = require(path.join(__dirname, 'server-inbox.js'));
@@ -1664,12 +1665,28 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  const mailInfo = mail.mailStatus();
-  console.log(`\nPineappleChat running on http://localhost:${PORT}`);
-  console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON' : 'OFF'}`);
-  console.log(`Session grace: ${SESSION_GRACE_MS / 1000}s after disconnect`);
-  console.log(`Email: ${mailInfo.configured ? 'CONFIGURED (' + mailInfo.provider + ')' : 'NOT CONFIGURED — set RESEND_API_KEY or SMTP_* to send verification codes'}`);
-  console.log(`Owner: ${accounts.ownerEmail()}`);
-  console.log('Open that URL in your browser to start chatting!\n');
-});
+
+function startListening() {
+  server.listen(PORT, () => {
+    const mailInfo = mail.mailStatus();
+    console.log(`\nPineappleChat running on http://localhost:${PORT}`);
+    console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON' : 'OFF'}`);
+    console.log(`Session grace: ${SESSION_GRACE_MS / 1000}s after disconnect`);
+    console.log(`Email: ${mailInfo.configured ? 'CONFIGURED (' + mailInfo.provider + ')' : 'NOT CONFIGURED — set RESEND_API_KEY or SMTP_* to send verification codes'}`);
+    console.log(`Owner: ${accounts.ownerEmail()}`);
+    console.log(`Backup: ${backup.configured() ? 'Gist (friends + inbox survive deploys)' : 'OFF — friends/inbox reset on Render deploy until DATA_GIST_ID is set'}`);
+    console.log('Open that URL in your browser to start chatting!\n');
+  });
+}
+
+backup
+  .restore()
+  .then((info) => {
+    if (info && info.restored) {
+      accounts.reload();
+      inbox.reload();
+      features.reloadReports();
+    }
+  })
+  .catch((e) => console.warn('[backup] startup:', e.message))
+  .finally(startListening);

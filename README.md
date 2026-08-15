@@ -34,6 +34,7 @@ By default **demo users are off** (correct for production).
    - `BREVO_API_KEY` = Brevo API key (recommended on **Render free** — Gmail SMTP is blocked there)
    - `EMAIL_FROM` = e.g. `PineappleChat <instabusiness8801@gmail.com>` (must be a verified Brevo sender)
    - `OWNER_EMAIL` = your login email (sees every member, unlimited inbox messages)
+   - `DATA_GIST_ID` + `DATA_GIST_TOKEN` = secret Gist backup so friends and inbox survive deploys (Render free disk is wiped on each deploy)
    - Do **not** set `PORT` — Render sets it automatically
 5. Deploy → open the URL Render gives you (e.g. `https://your-app.onrender.com`)
 

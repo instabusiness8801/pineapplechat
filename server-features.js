@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DATA_DIR = path.join(__dirname, 'data');
+const { DATA_DIR, ensureDataDir } = require(path.join(__dirname, 'data-dir.js'));
 const REPORTS_FILE = path.join(DATA_DIR, 'reports.json');
 
 function ensureDir() {
@@ -47,9 +47,17 @@ function saveReports() {
   try {
     ensureDir();
     fs.writeFileSync(REPORTS_FILE, JSON.stringify(reports.slice(-500), null, 2));
+    try {
+      require(path.join(__dirname, 'data-backup.js')).schedulePush();
+    } catch (e) { /* ignore */ }
   } catch (e) {
     console.warn('[features] reports save:', e.message);
   }
+}
+
+function reloadReports() {
+  reports.length = 0;
+  loadReports();
 }
 
 function getReports(limit) {
@@ -245,6 +253,7 @@ module.exports = {
   rateLimit,
   addReport,
   getReports,
+  reloadReports,
   toggleReaction,
   reactionSnapshot,
   registerMessageOwner,

@@ -6,8 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const mail = require(path.join(__dirname, 'server-mail.js'));
+const { DATA_DIR, ensureDataDir } = require(path.join(__dirname, 'data-dir.js'));
 
-const DATA_DIR = path.join(__dirname, 'data');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
 const PENDING_FILE = path.join(DATA_DIR, 'pending.json');
 const TOKENS_FILE = path.join(DATA_DIR, 'auth-tokens.json');
@@ -25,10 +25,6 @@ const pendingSignups = new Map();
 const sessionAccount = new Map();
 /** authToken -> { email, expiresAt } */
 const authTokens = new Map();
-
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-}
 
 function ownerEmail() {
   return String(process.env.OWNER_EMAIL || DEFAULT_OWNER)
@@ -145,6 +141,9 @@ function saveAccounts() {
       };
     }
     fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(obj, null, 2), 'utf8');
+    try {
+      require(path.join(__dirname, 'data-backup.js')).schedulePush();
+    } catch (e) { /* ignore */ }
   } catch (e) {
     console.warn('[accounts] save failed:', e.message);
   }
@@ -436,6 +435,11 @@ function verify(email, code) {
     outgoingRequests: leftover && leftover.outgoingRequests ? leftover.outgoingRequests : [],
     blocked: leftover && leftover.blocked ? leftover.blocked : [],
     displayName: leftover && leftover.displayName ? leftover.displayName : email.split('@')[0],
+    gender: leftover && leftover.gender ? leftover.gender : null,
+    country: leftover && leftover.country ? leftover.country : null,
+    city: leftover && leftover.city ? leftover.city : null,
+    interests: leftover && leftover.interests ? leftover.interests : [],
+    image: leftover && leftover.image ? leftover.image : null,
     createdAt: leftover && leftover.createdAt ? leftover.createdAt : now,
     lastLoginAt: now,
     lastSeenAt: now
@@ -912,6 +916,13 @@ function listAllUsersAdmin(sessionToken, isEmailOnline) {
   return { ok: true, users, pending, ownerEmail: ownerEmail() };
 }
 
+function reload() {
+  accounts.clear();
+  pendingSignups.clear();
+  authTokens.clear();
+  loadAccounts();
+}
+
 loadAccounts();
 
 module.exports = {
@@ -934,6 +945,7 @@ module.exports = {
   listRegisteredUsers,
   listPublicMembers,
   listAllUsersAdmin,
+  reload,
   updateMemberProfile,
   getAccountByPublicId,
   publicIdOf,
