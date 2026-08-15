@@ -29,10 +29,11 @@ By default **demo users are off** (correct for production).
    - **Build command:** `npm install`
    - **Start command:** `npm start`
    - **Plan:** Free is fine to start
-4. Environment variables (optional):
+4. Environment variables:
    - `ENABLE_DEMO_USERS` = `false` (or leave unset)
-   - `RESEND_API_KEY` = your Resend API key (for real verification emails)
+   - `RESEND_API_KEY` = your Resend API key (**required** so verification codes are emailed)
    - `EMAIL_FROM` = e.g. `PineappleChat <onboarding@resend.dev>`
+   - `OWNER_EMAIL` = your login email (sees every member, unlimited inbox messages)
    - Do **not** set `PORT` — Render sets it automatically
 5. Deploy → open the URL Render gives you (e.g. `https://your-app.onrender.com`)
 
@@ -41,14 +42,19 @@ By default **demo users are off** (correct for production).
 - Free Render services **sleep** when idle; first load can take ~30–60s.
 - Use **two browsers** (or phone + computer) to test real chat — demo users cannot chat.
 - Age gate is **18+**; terms agreement required; links/unsafe text are filtered.
-- Without `RESEND_API_KEY`, verification codes are shown in the UI (demo mode) and logged to the server console.
+- Accounts are created only after the emailed 6-digit code is confirmed.
+- Inbox messages between registered users persist (including offline) until deleted.
+- Registered members can send up to 5 inbox messages until the other person replies; the count resets after a reply or 48 hours. The owner account has no limit.
 
 ## Features
 
 - Multi-chat, filters, block / unblock, report user
-- Email register + code verification (Resend optional)
-- Friends list with online status
-- Reply to messages, reactions, read receipts (“Seen”)
+- Email register + real verification code
+- Friends + friend requests, online / last-seen
+- Persistent inbox for registered users (read ticks, offline delivery)
+- Registered members directory
+- Owner admin list (all users, reports, unlimited messaging)
+- Reply to messages, reactions, read receipts
 - Mute chat, voice notes, invite links
 - Interests on profile, rate limits on spammy actions
 

@@ -825,8 +825,57 @@
       border-color: transparent !important;
     }
     #account-modal:not(.hidden),
-    #report-modal:not(.hidden) {
+    #report-modal:not(.hidden),
+    #inbox-modal:not(.hidden) {
       display: flex !important;
+    }
+    .acct-tab.is-active-acct {
+      background: var(--pine-leaf, #2d8a4e);
+      color: #fff;
+      border-color: transparent !important;
+    }
+    .nav-unread-badge {
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: #dc2626;
+      color: #fff;
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+      font-weight: 700;
+    }
+    .msg-ticks {
+      font-size: 11px;
+      letter-spacing: -1px;
+      margin-left: 6px;
+      opacity: 0.75;
+    }
+    .msg-ticks.is-read {
+      color: #2563eb;
+      opacity: 1;
+    }
+    .inbox-shell {
+      display: grid;
+      grid-template-columns: minmax(180px, 34%) 1fr;
+      min-height: min(70vh, 560px);
+    }
+    @media (max-width: 640px) {
+      .inbox-shell { grid-template-columns: 1fr; }
+      .inbox-shell.is-thread .inbox-col-list { display: none; }
+      .inbox-shell:not(.is-thread) .inbox-col-thread { display: none; }
+    }
+    .inbox-thread-item.is-active {
+      background: rgba(143, 188, 143, 0.22);
+    }
+    .inbox-toast {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 300;
+      max-width: 320px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
     }
     .interest-chip.is-selected,
     .status-chip.is-selected {
@@ -934,6 +983,19 @@
                 aria-label="Invite">
           <i class="fa-solid fa-link text-sm"></i>
           <span class="hidden sm:inline">Invite</span>
+        </button>
+        <button type="button" id="members-btn" title="Registered members"
+                class="hidden items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-emerald-50 transition min-h-[36px]"
+                aria-label="Members">
+          <i class="fa-solid fa-users text-sm"></i>
+          <span class="hidden sm:inline">Members</span>
+        </button>
+        <button type="button" id="inbox-btn" title="Inbox"
+                class="hidden items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-amber-50 transition min-h-[36px] relative"
+                aria-label="Inbox">
+          <i class="fa-solid fa-inbox text-sm"></i>
+          <span class="hidden sm:inline">Inbox</span>
+          <span id="inbox-unread-badge" class="hidden nav-unread-badge absolute -top-1 -right-1">0</span>
         </button>
         <button type="button" id="account-btn" title="Email account & friends"
                 class="items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-emerald-50 transition min-h-[36px]"
@@ -1245,7 +1307,7 @@
                   <i class="fa-solid fa-door-open"></i>
                   <span class="hidden sm:inline text-[10px]">Leave</span>
                 </button>
-                <button type="button" id="add-friend-btn" title="Add as friend (requires email registration)" class="text-xs px-2 py-1.5 text-emerald-600 hover:bg-emerald-50 rounded flex items-center gap-1 min-h-[36px]">
+                <button type="button" id="add-friend-btn" title="Send friend request (requires email registration)" class="text-xs px-2 py-1.5 text-emerald-600 hover:bg-emerald-50 rounded flex items-center gap-1 min-h-[36px]">
                   <i class="fa-solid fa-user-plus"></i>
                   <span class="hidden sm:inline text-[10px]">Friend</span>
                 </button>
@@ -1317,12 +1379,12 @@
 
   <!-- Account / Friends modal -->
   <div id="account-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
-    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold theme-text-strong">Account &amp; Friends</h2>
         <button type="button" id="account-modal-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
       </div>
-      <p class="text-[11px] theme-muted mb-3">Register with email + password, confirm the 6-digit code, then add chat partners as friends.</p>
+      <p class="text-[11px] theme-muted mb-3">Register with email + password. We email a 6-digit code — confirm it to create your account, then use Friends, Members, and Inbox.</p>
 
       <div id="account-logged-out" class="space-y-3">
         <div class="flex gap-2 text-xs mb-2">
@@ -1351,20 +1413,85 @@
       </div>
 
       <div id="account-logged-in" class="hidden space-y-3">
-        <div class="text-sm theme-text">Signed in as <strong id="account-email-display"></strong></div>
-        <div>
-          <div class="text-xs font-semibold theme-text-strong mb-1">Friends <span class="font-normal theme-muted">(online first)</span></div>
-          <ul id="friends-list" class="text-xs space-y-1 theme-muted max-h-40 overflow-y-auto"></ul>
-          <p class="text-[10px] theme-muted mt-1">Tip: open a chat and tap <strong>Friend</strong> to add that person (they must also have a verified email).</p>
+        <div class="text-sm theme-text">Signed in as <strong id="account-email-display"></strong>
+          <span id="owner-badge" class="hidden text-[10px] ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">Owner</span>
         </div>
-        <div>
+        <div class="flex flex-wrap gap-1 text-[11px]" id="account-tabs">
+          <button type="button" data-acct-tab="friends" class="acct-tab px-2.5 py-1 rounded-lg border theme-border is-active-acct">Friends</button>
+          <button type="button" data-acct-tab="people" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">People</button>
+          <button type="button" data-acct-tab="requests" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Requests <span id="request-badge" class="hidden nav-unread-badge align-middle">0</span></button>
+          <button type="button" data-acct-tab="blocked" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Blocked</button>
+          <button type="button" data-acct-tab="admin" id="admin-tab-btn" class="acct-tab hidden px-2.5 py-1 rounded-lg border theme-border">Admin</button>
+        </div>
+        <div id="acct-panel-friends" class="acct-panel">
+          <div class="text-xs font-semibold theme-text-strong mb-1">Friends <span class="font-normal theme-muted">(online first)</span></div>
+          <ul id="friends-list" class="text-xs space-y-1 theme-muted max-h-52 overflow-y-auto"></ul>
+          <p class="text-[10px] theme-muted mt-1">Send a friend request from People, or tap <strong>Friend</strong> in a live chat. Inbox messages stay even if they are offline.</p>
+        </div>
+        <div id="acct-panel-people" class="acct-panel hidden">
+          <input id="people-search" type="search" placeholder="Search registered members" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none mb-2">
+          <ul id="people-list" class="text-xs space-y-1 theme-muted max-h-56 overflow-y-auto"></ul>
+        </div>
+        <div id="acct-panel-requests" class="acct-panel hidden space-y-2">
+          <div class="text-xs font-semibold theme-text-strong">Incoming</div>
+          <ul id="requests-in-list" class="text-xs space-y-1 theme-muted"></ul>
+          <div class="text-xs font-semibold theme-text-strong">Outgoing</div>
+          <ul id="requests-out-list" class="text-xs space-y-1 theme-muted"></ul>
+        </div>
+        <div id="acct-panel-blocked" class="acct-panel hidden">
           <div class="text-xs font-semibold theme-text-strong mb-1">Blocked users</div>
-          <ul id="blocked-list" class="text-xs space-y-1 theme-muted max-h-28 overflow-y-auto"></ul>
+          <ul id="blocked-list" class="text-xs space-y-1 theme-muted max-h-40 overflow-y-auto"></ul>
+        </div>
+        <div id="acct-panel-admin" class="acct-panel hidden space-y-2">
+          <div class="text-xs font-semibold theme-text-strong">All users (owner)</div>
+          <p class="text-[10px] theme-muted">You can open any inbox and message without the 5-message limit.</p>
+          <ul id="admin-users-list" class="text-xs space-y-1 theme-muted max-h-56 overflow-y-auto"></ul>
+          <div class="text-xs font-semibold theme-text-strong mt-2">Recent reports</div>
+          <ul id="admin-reports-list" class="text-[11px] space-y-1 theme-muted max-h-32 overflow-y-auto"></ul>
         </div>
         <button type="button" id="account-logout-email" class="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5">Sign out of email account</button>
       </div>
     </div>
   </div>
+
+  <!-- Persistent registered-user inbox -->
+  <div id="inbox-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-3 sm:p-4" style="background:rgba(0,0,0,0.45)">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div class="flex items-center justify-between px-4 py-3 border-b theme-border">
+        <h2 class="text-lg font-semibold theme-text-strong">Inbox</h2>
+        <div class="flex items-center gap-2">
+          <button type="button" id="inbox-new-btn" class="text-xs px-2.5 py-1 rounded-lg border theme-border">New message</button>
+          <button type="button" id="inbox-modal-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
+        </div>
+      </div>
+      <div id="inbox-shell" class="inbox-shell flex-1 min-h-0">
+        <aside class="inbox-col-list border-r theme-border overflow-y-auto">
+          <ul id="inbox-thread-list" class="text-sm"></ul>
+        </aside>
+        <section class="inbox-col-thread flex flex-col min-h-0">
+          <div id="inbox-thread-header" class="px-3 py-2 border-b theme-border flex items-center justify-between gap-2">
+            <div>
+              <div id="inbox-partner-name" class="text-sm font-semibold theme-text-strong">Select a conversation</div>
+              <div id="inbox-partner-meta" class="text-[11px] theme-muted"></div>
+            </div>
+            <div class="flex gap-1">
+              <button type="button" id="inbox-back-btn" class="sm:hidden text-xs px-2 py-1 border theme-border rounded">Back</button>
+              <button type="button" id="inbox-friend-btn" class="hidden text-xs px-2 py-1 text-emerald-600 border border-emerald-200 rounded">Friend</button>
+              <button type="button" id="inbox-report-btn" class="hidden text-xs px-2 py-1 text-amber-600 border border-amber-200 rounded">Report</button>
+              <button type="button" id="inbox-block-btn" class="hidden text-xs px-2 py-1 text-red-500 border border-red-200 rounded">Block</button>
+            </div>
+          </div>
+          <div id="inbox-messages" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm theme-chat-bg"></div>
+          <div id="inbox-limit-status" class="text-[10px] px-3 pt-1 theme-muted"></div>
+          <form id="inbox-form" class="p-2 sm:p-3 border-t theme-border flex gap-2">
+            <input id="inbox-input" type="text" placeholder="Write a message…" autocomplete="off" class="flex-1 theme-input theme-field-yellow border rounded-2xl px-3 py-2 text-sm outline-none min-h-[40px]">
+            <button type="submit" class="btn-primary-g px-4 py-2 rounded-2xl text-sm">Send</button>
+          </form>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div id="inbox-toast" class="inbox-toast hidden theme-surface border theme-border rounded-xl px-3 py-2 text-sm cursor-pointer"></div>
 
   <!-- Report user modal -->
   <div id="report-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
@@ -1685,6 +1812,12 @@
     /** In-memory only — re-bind account after set-profile creates sessionToken */
     let accountPasswordCache = null;
     let accountEmailCache = null;
+    const AUTH_KEY = 'pineapplechat-auth';
+    let accountAuthToken = null;
+    let inboxPartnerEmail = null;
+    let inboxThreads = [];
+    let registeredUsersCache = [];
+    let inboxUnreadCount = 0;
     /** selected interest tags (max 5) */
     let selectedInterests = [];
     /** relationship status: single | in_a_relationship | married | divorced | separated | null */
@@ -2182,6 +2315,7 @@
           socket.emit('set-profile', currentProfile);
         }
         socket.emit('request-online-users');
+        restoreAccountSession();
       });
 
       socket.on('disconnect', (reason) => {
@@ -2198,6 +2332,7 @@
           socket.emit('set-profile', currentProfile);
         }
         socket.emit('request-online-users');
+        restoreAccountSession();
       });
 
       socket.on('logged-out', () => {
@@ -2389,7 +2524,7 @@
 
       socket.on('friend-added', (info) => {
         if (info && info.message) {
-          console.log('[PineappleChat]', info.message);
+          showInboxToast(info.message);
         }
         if (socket) {
           socket.emit('friend-list', (res) => {
@@ -2399,6 +2534,50 @@
             }
           });
         }
+      });
+
+      socket.on('friend-request', (info) => {
+        showInboxToast((info && info.message) || 'New friend request');
+        if (typeof refreshRequestsUI === 'function') refreshRequestsUI();
+        if (typeof openAccountModal === 'function' && myAccount) {
+          const badge = document.getElementById('request-badge');
+          if (badge) {
+            const n = (parseInt(badge.textContent, 10) || 0) + 1;
+            badge.textContent = String(n);
+            badge.classList.remove('hidden');
+          }
+        }
+      });
+
+      socket.on('inbox-new', (payload) => {
+        if (!payload) return;
+        if (payload.unread != null) setInboxUnread(payload.unread);
+        showInboxToast((payload.fromName || 'Someone') + ': ' + String((payload.message && payload.message.text) || 'New message').slice(0, 80), payload.from);
+        if (inboxPartnerEmail && payload.from === inboxPartnerEmail) {
+          appendInboxMessage(payload.message, false);
+          if (socket) socket.emit('inbox-mark-read', { email: payload.from });
+        } else if (typeof refreshInboxList === 'function') {
+          refreshInboxList();
+        }
+      });
+
+      socket.on('inbox-unread', (payload) => {
+        if (payload && typeof payload.count === 'number') setInboxUnread(payload.count);
+      });
+
+      socket.on('inbox-delivered', (payload) => {
+        if (payload && payload.id) setInboxTicks(payload.id, 'delivered');
+      });
+
+      socket.on('inbox-read', (payload) => {
+        const ids = payload && payload.ids ? payload.ids : [];
+        ids.forEach((id) => setInboxTicks(id, 'read'));
+      });
+
+      socket.on('inbox-deleted', (payload) => {
+        if (!payload || !payload.msgId) return;
+        const el = document.querySelector('#inbox-messages [data-inbox-id="' + payload.msgId + '"]');
+        if (el) el.remove();
       });
 
       socket.on('message-reactions', (payload) => {
@@ -2416,11 +2595,16 @@
       socket.on('read-receipt', (payload) => {
         if (!payload) return;
         const el = document.getElementById('read-receipt-status');
-        if (!el) return;
-        // Only show for active chat when partner read our messages
-        if (!activeChatId) return;
-        el.textContent = 'Seen';
-        el.style.color = 'var(--pine-leaf, #2d8a4e)';
+        if (el && activeChatId) {
+          el.textContent = 'Seen';
+          el.style.color = 'var(--pine-leaf, #2d8a4e)';
+        }
+        document.querySelectorAll('.msg-ticks').forEach((tick) => {
+          if (payload.lastMsgId && tick.dataset.msgId && tick.dataset.msgId !== payload.lastMsgId) return;
+          tick.textContent = '✓✓';
+          tick.classList.add('is-read');
+          tick.title = 'Read';
+        });
       });
 
       socket.on('chat-left', (data) => {
@@ -2515,6 +2699,104 @@
       setPendingReply(null);
     }
 
+    function saveAuth(token, email) {
+      accountAuthToken = token || accountAuthToken;
+      if (email) accountEmailCache = email;
+      try {
+        if (accountAuthToken) {
+          localStorage.setItem(AUTH_KEY, JSON.stringify({
+            token: accountAuthToken,
+            email: accountEmailCache || email || '',
+            savedAt: Date.now()
+          }));
+        }
+      } catch (e) { /* ignore */ }
+    }
+
+    function loadAuth() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+        if (raw && raw.token) {
+          accountAuthToken = raw.token;
+          accountEmailCache = raw.email || accountEmailCache;
+          return raw;
+        }
+      } catch (e) { /* ignore */ }
+      return null;
+    }
+
+    function clearAuth() {
+      accountAuthToken = null;
+      try { localStorage.removeItem(AUTH_KEY); } catch (e) { /* ignore */ }
+    }
+
+    function applyLoggedInAccount(account, authToken) {
+      if (!account) return;
+      myAccount = account;
+      if (authToken) saveAuth(authToken, account.email);
+      if (account.email) accountEmailCache = account.email;
+      updateAccountBtnLabel();
+      updateLoggedInChrome();
+    }
+
+    function updateLoggedInChrome() {
+      const loggedIn = !!(myAccount && myAccount.verified);
+      ['inbox-btn', 'members-btn'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('hidden', !loggedIn);
+        el.classList.toggle('inline-flex', loggedIn);
+      });
+      const badge = document.getElementById('owner-badge');
+      if (badge) badge.classList.toggle('hidden', !(myAccount && myAccount.isOwner));
+      const adminTab = document.getElementById('admin-tab-btn');
+      if (adminTab) adminTab.classList.toggle('hidden', !(myAccount && myAccount.isOwner));
+    }
+
+    function setInboxUnread(n) {
+      inboxUnreadCount = Math.max(0, Number(n) || 0);
+      const badge = document.getElementById('inbox-unread-badge');
+      if (!badge) return;
+      if (inboxUnreadCount > 0) {
+        badge.textContent = inboxUnreadCount > 99 ? '99+' : String(inboxUnreadCount);
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+    }
+
+    function formatLastSeen(ts, online, away) {
+      if (online) return 'Online now';
+      if (away) return 'Away (reconnecting)';
+      if (!ts) return 'Last seen unknown';
+      const diff = Date.now() - Number(ts);
+      if (diff < 60 * 1000) return 'Last seen just now';
+      if (diff < 60 * 60 * 1000) return 'Last seen ' + Math.floor(diff / 60000) + ' min ago';
+      if (diff < 24 * 60 * 60 * 1000) return 'Last seen ' + Math.floor(diff / 3600000) + 'h ago';
+      try {
+        return 'Last login ' + new Date(ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return 'Last seen earlier';
+      }
+    }
+
+    function restoreAccountSession() {
+      if (!socket) return;
+      const saved = loadAuth();
+      if (!saved || !saved.token) return;
+      socket.emit('account-restore', { token: saved.token }, (res) => {
+        if (res && res.ok && res.account) {
+          applyLoggedInAccount(res.account, res.authToken || saved.token);
+          if (typeof res.unread === 'number') setInboxUnread(res.unread);
+        } else {
+          clearAuth();
+          myAccount = null;
+          updateAccountBtnLabel();
+          updateLoggedInChrome();
+        }
+      });
+    }
+
     function updateAccountBtnLabel() {
       const el = document.getElementById('account-btn-label');
       if (!el) return;
@@ -2523,6 +2805,19 @@
       } else {
         el.textContent = 'Account';
       }
+      updateLoggedInChrome();
+    }
+
+    function personLabel(item) {
+      if (!item) return 'User';
+      if (typeof item === 'string') return item;
+      return item.displayName || item.username || item.email || 'User';
+    }
+
+    function openInboxWith(email) {
+      if (!email) return;
+      closeAccountModal();
+      openInboxModal(email);
     }
 
     function refreshFriendsListUI(friendsPayload) {
@@ -2538,46 +2833,69 @@
         const email = typeof item === 'string' ? item : item.email;
         const online = typeof item === 'object' && item.online;
         const away = typeof item === 'object' && item.away;
-        const username = typeof item === 'object' ? item.username : null;
+        const lastSeen = typeof item === 'object' ? (item.lastSeenAt || item.lastLoginAt) : null;
         const li = document.createElement('li');
-        li.className = 'py-1 flex items-center justify-between gap-2';
-        const left = document.createElement('span');
-        left.innerHTML = `<span class="${online ? 'friend-online-dot' : 'friend-offline-dot'}" title="${online ? 'Online' : (away ? 'Away' : 'Offline')}"></span>` +
-          escapeHtml(username ? `${username} · ${email}` : email) +
-          (online ? ' <span class="text-emerald-600">online</span>' : (away ? ' <span class="text-amber-600">away</span>' : ''));
+        li.className = 'py-1.5 flex items-center justify-between gap-2 border-b theme-border last:border-0';
+        const left = document.createElement('div');
+        left.className = 'min-w-0';
+        left.innerHTML = `<div class="truncate"><span class="${online ? 'friend-online-dot' : 'friend-offline-dot'}" title="${online ? 'Online' : (away ? 'Away' : 'Offline')}"></span>` +
+          escapeHtml(personLabel(item)) +
+          (online ? ' <span class="text-emerald-600">online</span>' : (away ? ' <span class="text-amber-600">away</span>' : ' <span class="theme-muted">offline</span>')) +
+          `</div><div class="text-[10px] theme-muted truncate">${escapeHtml(formatLastSeen(lastSeen, online, away))}</div>`;
         li.appendChild(left);
-        if (online && typeof item === 'object' && item.socketId) {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
-          btn.textContent = 'Chat';
-          btn.onclick = () => {
-            closeAccountModal();
-            ensureChat(item.socketId, { username: username || email }, item.sessionToken);
-            showScreen('hub');
-            switchToChat(item.socketId);
-            if (socket) socket.emit('start-chat-with', { targetId: item.socketId });
-          };
-          li.appendChild(btn);
-        }
+        const actions = document.createElement('div');
+        actions.className = 'flex gap-1 flex-shrink-0';
+        const msgBtn = document.createElement('button');
+        msgBtn.type = 'button';
+        msgBtn.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
+        msgBtn.textContent = 'Message';
+        msgBtn.onclick = () => openInboxWith(email);
+        actions.appendChild(msgBtn);
+        li.appendChild(actions);
         ul.appendChild(li);
       });
     }
 
-    function refreshBlockedListUI() {
+    function refreshBlockedListUI(accountBlocked) {
       const ul = document.getElementById('blocked-list');
       if (!ul) return;
       ul.innerHTML = '';
-      if (!blockedIds.size) {
+      const accList = Array.isArray(accountBlocked) ? accountBlocked : [];
+      const sessionList = Array.from(blockedIds);
+      if (!accList.length && !sessionList.length) {
         ul.innerHTML = '<li class="theme-muted">No blocked users.</li>';
         return;
       }
-      Array.from(blockedIds).forEach((id) => {
+      accList.forEach((item) => {
+        const email = item.email || item;
         const li = document.createElement('li');
         li.className = 'py-1 flex items-center justify-between gap-2';
         const span = document.createElement('span');
         span.className = 'truncate';
-        span.textContent = String(id).slice(0, 16) + (String(id).length > 16 ? '…' : '');
+        span.textContent = item.displayName ? item.displayName + ' · ' + email : email;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-[10px] text-emerald-600 px-2 py-0.5 border border-emerald-200 rounded';
+        btn.textContent = 'Unblock';
+        btn.onclick = () => {
+          if (!socket) return;
+          socket.emit('account-unblock', { email }, (res) => {
+            if (res && res.ok) {
+              myAccount = res.account || myAccount;
+              refreshAccountLists();
+            }
+          });
+        };
+        li.appendChild(span);
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      sessionList.forEach((id) => {
+        const li = document.createElement('li');
+        li.className = 'py-1 flex items-center justify-between gap-2';
+        const span = document.createElement('span');
+        span.className = 'truncate';
+        span.textContent = 'Stranger session ' + String(id).slice(0, 10);
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'text-[10px] text-emerald-600 px-2 py-0.5 border border-emerald-200 rounded';
@@ -2587,7 +2905,7 @@
           socket.emit('unblock-user', { targetId: id }, (res) => {
             if (res && res.ok) {
               blockedIds.delete(id);
-              refreshBlockedListUI();
+              refreshBlockedListUI(accList);
               renderSidebarUsers();
             }
           });
@@ -2598,7 +2916,234 @@
       });
     }
 
-    function openAccountModal() {
+    function switchAcctTab(tab) {
+      document.querySelectorAll('.acct-tab').forEach((b) => {
+        b.classList.toggle('is-active-acct', b.dataset.acctTab === tab);
+      });
+      document.querySelectorAll('.acct-panel').forEach((p) => p.classList.add('hidden'));
+      const panel = document.getElementById('acct-panel-' + tab);
+      if (panel) panel.classList.remove('hidden');
+      if (tab === 'people') refreshPeopleUI();
+      if (tab === 'requests') refreshRequestsUI();
+      if (tab === 'admin') refreshAdminUI();
+    }
+
+    function refreshPeopleUI() {
+      if (!socket) return;
+      socket.emit('users-list', (res) => {
+        registeredUsersCache = (res && res.users) || [];
+        renderPeopleList();
+      });
+    }
+
+    function renderPeopleList() {
+      const ul = document.getElementById('people-list');
+      if (!ul) return;
+      const q = ((document.getElementById('people-search') || {}).value || '').toLowerCase().trim();
+      const list = registeredUsersCache.filter((u) => {
+        if (!q) return true;
+        return (u.displayName || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+      });
+      ul.innerHTML = '';
+      if (!list.length) {
+        ul.innerHTML = '<li class="theme-muted">No registered members yet.</li>';
+        return;
+      }
+      list.forEach((u) => {
+        const li = document.createElement('li');
+        li.className = 'py-1.5 flex items-center justify-between gap-2 border-b theme-border last:border-0';
+        const left = document.createElement('div');
+        left.className = 'min-w-0';
+        const ownerMark = u.isOwner ? ' · owner' : '';
+        left.innerHTML = `<div class="truncate"><span class="${u.online ? 'friend-online-dot' : 'friend-offline-dot'}"></span>${escapeHtml(personLabel(u))}${u.isFriend ? ' <span class="text-emerald-600">friend</span>' : ''}${escapeHtml(ownerMark)}</div>
+          <div class="text-[10px] theme-muted">${escapeHtml(formatLastSeen(u.lastSeenAt || u.lastLoginAt, u.online, u.away))}</div>`;
+        const actions = document.createElement('div');
+        actions.className = 'flex gap-1 flex-shrink-0';
+        if (!u.isFriend && !u.requestOutgoing && !u.requestIncoming) {
+          const req = document.createElement('button');
+          req.type = 'button';
+          req.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
+          req.textContent = 'Add';
+          req.onclick = () => sendFriendRequestTo(u.email);
+          actions.appendChild(req);
+        } else if (u.requestOutgoing) {
+          const pending = document.createElement('span');
+          pending.className = 'text-[10px] theme-muted';
+          pending.textContent = 'Requested';
+          actions.appendChild(pending);
+        } else if (u.requestIncoming) {
+          const acc = document.createElement('button');
+          acc.type = 'button';
+          acc.className = 'text-[10px] px-2 py-0.5 rounded border border-emerald-200 text-emerald-700';
+          acc.textContent = 'Accept';
+          acc.onclick = () => {
+            socket.emit('friend-accept', { email: u.email }, (res) => {
+              if (res && res.ok) {
+                myAccount = res.account || myAccount;
+                refreshAccountLists();
+              } else {
+                alert((res && res.message) || 'Could not accept');
+              }
+            });
+          };
+          actions.appendChild(acc);
+        }
+        const msg = document.createElement('button');
+        msg.type = 'button';
+        msg.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
+        msg.textContent = 'Message';
+        msg.onclick = () => openInboxWith(u.email);
+        actions.appendChild(msg);
+        li.appendChild(left);
+        li.appendChild(actions);
+        ul.appendChild(li);
+      });
+    }
+
+    function sendFriendRequestTo(email) {
+      if (!socket) return;
+      socket.emit('friend-add', { email }, (res) => {
+        if (!res || !res.ok) {
+          alert((res && res.message) || 'Could not send request.');
+          return;
+        }
+        myAccount = res.account || myAccount;
+        alert(res.message || 'Friend request sent.');
+        refreshAccountLists();
+      });
+    }
+
+    function refreshRequestsUI() {
+      if (!socket) return;
+      socket.emit('friend-requests', (res) => {
+        const inUl = document.getElementById('requests-in-list');
+        const outUl = document.getElementById('requests-out-list');
+        const incoming = (res && res.incoming) || [];
+        const outgoing = (res && res.outgoing) || [];
+        const badge = document.getElementById('request-badge');
+        if (badge) {
+          if (incoming.length) {
+            badge.textContent = String(incoming.length);
+            badge.classList.remove('hidden');
+          } else {
+            badge.classList.add('hidden');
+          }
+        }
+        if (inUl) {
+          inUl.innerHTML = incoming.length ? '' : '<li class="theme-muted">No incoming requests.</li>';
+          incoming.forEach((u) => {
+            const li = document.createElement('li');
+            li.className = 'py-1 flex items-center justify-between gap-2';
+            li.innerHTML = `<span class="truncate">${escapeHtml(personLabel(u))}</span>`;
+            const acc = document.createElement('button');
+            acc.type = 'button';
+            acc.className = 'text-[10px] px-2 py-0.5 rounded border border-emerald-200 text-emerald-700';
+            acc.textContent = 'Accept';
+            acc.onclick = () => socket.emit('friend-accept', { email: u.email }, (r) => {
+              if (r && r.ok) { myAccount = r.account || myAccount; refreshAccountLists(); }
+            });
+            const dec = document.createElement('button');
+            dec.type = 'button';
+            dec.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
+            dec.textContent = 'Decline';
+            dec.onclick = () => socket.emit('friend-decline', { email: u.email }, () => refreshAccountLists());
+            const wrap = document.createElement('div');
+            wrap.className = 'flex gap-1';
+            wrap.appendChild(acc);
+            wrap.appendChild(dec);
+            li.appendChild(wrap);
+            inUl.appendChild(li);
+          });
+        }
+        if (outUl) {
+          outUl.innerHTML = outgoing.length ? '' : '<li class="theme-muted">No outgoing requests.</li>';
+          outgoing.forEach((u) => {
+            const li = document.createElement('li');
+            li.className = 'py-1 flex items-center justify-between gap-2';
+            li.innerHTML = `<span class="truncate">${escapeHtml(personLabel(u))} <span class="theme-muted">pending</span></span>`;
+            const cancel = document.createElement('button');
+            cancel.type = 'button';
+            cancel.className = 'text-[10px] px-2 py-0.5 rounded border theme-border';
+            cancel.textContent = 'Cancel';
+            cancel.onclick = () => socket.emit('friend-decline', { email: u.email }, () => refreshAccountLists());
+            li.appendChild(cancel);
+            outUl.appendChild(li);
+          });
+        }
+      });
+    }
+
+    function refreshAdminUI() {
+      if (!socket || !myAccount || !myAccount.isOwner) return;
+      socket.emit('admin-users', (res) => {
+        const ul = document.getElementById('admin-users-list');
+        const reportsUl = document.getElementById('admin-reports-list');
+        if (ul) {
+          ul.innerHTML = '';
+          const users = (res && res.users) || [];
+          if (!users.length) ul.innerHTML = '<li class="theme-muted">No users yet.</li>';
+          users.forEach((u) => {
+            const li = document.createElement('li');
+            li.className = 'py-1.5 border-b theme-border last:border-0';
+            li.innerHTML = `<div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="truncate">${escapeHtml(u.email)} ${u.verified ? '' : '<span class="text-amber-600">(unverified)</span>'}</div>
+                <div class="text-[10px] theme-muted">${escapeHtml(formatLastSeen(u.lastSeenAt || u.lastLoginAt, u.online, u.away))} · friends ${u.friendsCount || 0}</div>
+              </div>
+            </div>`;
+            if (u.verified && u.email !== (myAccount && myAccount.email)) {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'text-[10px] px-2 py-0.5 rounded border theme-border mt-1';
+              btn.textContent = 'Message (no limit)';
+              btn.onclick = () => openInboxWith(u.email);
+              li.appendChild(btn);
+            }
+            ul.appendChild(li);
+          });
+        }
+        if (reportsUl) {
+          reportsUl.innerHTML = '';
+          const reports = (res && res.reports) || [];
+          if (!reports.length) reportsUl.innerHTML = '<li class="theme-muted">No reports.</li>';
+          reports.forEach((r) => {
+            const li = document.createElement('li');
+            li.textContent = (r.reporterName || r.reporterId || 'user') + ' → ' + (r.targetName || r.targetId || 'user') + ': ' + (r.reason || 'other');
+            reportsUl.appendChild(li);
+          });
+        }
+      });
+    }
+
+    function refreshAccountLists() {
+      if (!socket || !myAccount) return;
+      socket.emit('friend-list', (res) => {
+        if (res && res.ok) {
+          myAccount.friends = res.friends || [];
+          myAccount.email = res.email || myAccount.email;
+          refreshFriendsListUI(res.friends);
+        }
+      });
+      refreshRequestsUI();
+      refreshPeopleUI();
+      socket.emit('account-blocked-list', (res) => {
+        refreshBlockedListUI((res && res.blocked) || []);
+      });
+      socket.emit('list-blocked', (res) => {
+        if (res && res.blocked) {
+          res.blocked.forEach((id) => blockedIds.add(id));
+          socket.emit('account-blocked-list', (r2) => {
+            refreshBlockedListUI((r2 && r2.blocked) || []);
+          });
+        }
+      });
+      if (myAccount.isOwner) refreshAdminUI();
+      socket.emit('inbox-unread', (res) => {
+        if (res && typeof res.count === 'number') setInboxUnread(res.count);
+      });
+    }
+
+    function openAccountModal(tab) {
       const modal = document.getElementById('account-modal');
       if (!modal) return;
       modal.classList.remove('hidden');
@@ -2609,24 +3154,11 @@
         if (loggedIn) loggedIn.classList.remove('hidden');
         const disp = document.getElementById('account-email-display');
         if (disp) disp.textContent = myAccount.email;
+        updateLoggedInChrome();
         refreshFriendsListUI();
         refreshBlockedListUI();
-        if (socket) {
-          socket.emit('friend-list', (res) => {
-            if (res && res.ok) {
-              myAccount = myAccount || {};
-              myAccount.friends = res.friends || [];
-              myAccount.email = res.email || myAccount.email;
-              refreshFriendsListUI(res.friends);
-            }
-          });
-          socket.emit('list-blocked', (res) => {
-            if (res && res.blocked) {
-              res.blocked.forEach((id) => blockedIds.add(id));
-              refreshBlockedListUI();
-            }
-          });
-        }
+        refreshAccountLists();
+        switchAcctTab(tab || 'friends');
       } else {
         if (loggedOut) loggedOut.classList.remove('hidden');
         if (loggedIn) loggedIn.classList.add('hidden');
@@ -2647,7 +3179,7 @@
         return;
       }
       box.classList.remove('hidden');
-      box.textContent = 'Demo verification code: ' + code + ' (no real email is sent — enter this code under Verify)';
+      box.textContent = 'Demo verification code: ' + code + ' (email provider not configured on this server — enter this code under Verify)';
     }
 
     function setAuthStatus(msg, isError) {
@@ -2694,7 +3226,7 @@
             }
             accountEmailCache = email;
             accountPasswordCache = password;
-            setAuthStatus(res.message || 'Registered — enter the verification code.');
+            setAuthStatus(res.message || 'Check your email for the 6-digit code, then verify to create the account.');
             showAuthDevCode(res.devCode);
             const ve = document.getElementById('verify-email');
             if (ve) ve.value = email;
@@ -2726,10 +3258,9 @@
             }
             accountEmailCache = email;
             accountPasswordCache = password;
-            myAccount = res.account;
+            applyLoggedInAccount(res.account, res.authToken);
             setAuthStatus('Logged in.');
             showAuthDevCode(null);
-            updateAccountBtnLabel();
             openAccountModal();
           });
         });
@@ -2747,14 +3278,14 @@
               return;
             }
             accountEmailCache = email;
-            myAccount = res.account;
-            // Bind may need sessionToken — re-login if we have password cache
-            if (accountPasswordCache && sessionToken) {
-              socket.emit('account-login', { email, password: accountPasswordCache }, () => {});
+            applyLoggedInAccount(res.account, res.authToken);
+            if (accountPasswordCache && sessionToken && !res.authToken) {
+              socket.emit('account-login', { email, password: accountPasswordCache }, (loginRes) => {
+                if (loginRes && loginRes.ok) applyLoggedInAccount(loginRes.account, loginRes.authToken);
+              });
             }
-            setAuthStatus(res.message || 'Verified!');
+            setAuthStatus(res.message || 'Verified! Your account is created.');
             showAuthDevCode(null);
-            updateAccountBtnLabel();
             openAccountModal();
           });
         });
@@ -2779,10 +3310,297 @@
       const emailLogout = document.getElementById('account-logout-email');
       if (emailLogout) {
         emailLogout.addEventListener('click', () => {
+          if (socket) socket.emit('account-logout', { authToken: accountAuthToken });
           myAccount = null;
+          clearAuth();
+          setInboxUnread(0);
           updateAccountBtnLabel();
           openAccountModal();
           setAuthStatus('Signed out of email account (chat profile may still be active).');
+        });
+      }
+
+      document.querySelectorAll('.acct-tab').forEach((btn) => {
+        btn.addEventListener('click', () => switchAcctTab(btn.dataset.acctTab));
+      });
+      const peopleSearch = document.getElementById('people-search');
+      if (peopleSearch) peopleSearch.addEventListener('input', () => renderPeopleList());
+
+      const membersBtn = document.getElementById('members-btn');
+      if (membersBtn) {
+        membersBtn.addEventListener('click', () => {
+          if (!myAccount) {
+            openAccountModal();
+            return;
+          }
+          openAccountModal('people');
+        });
+      }
+      const inboxBtn = document.getElementById('inbox-btn');
+      if (inboxBtn) inboxBtn.addEventListener('click', () => openInboxModal());
+      setupInboxModal();
+    }
+
+    function showInboxToast(text, openEmail) {
+      const el = document.getElementById('inbox-toast');
+      if (!el) return;
+      el.textContent = text || 'New inbox message';
+      el.classList.remove('hidden');
+      el.onclick = () => {
+        el.classList.add('hidden');
+        if (openEmail) openInboxWith(openEmail);
+        else openInboxModal();
+      };
+      clearTimeout(el._hide);
+      el._hide = setTimeout(() => el.classList.add('hidden'), 6000);
+    }
+
+    function ticksHtml(status) {
+      if (status === 'read') return '<span class="msg-ticks is-read" title="Read">✓✓</span>';
+      if (status === 'delivered') return '<span class="msg-ticks" title="Delivered">✓✓</span>';
+      return '<span class="msg-ticks" title="Sent">✓</span>';
+    }
+
+    function setInboxTicks(msgId, status) {
+      const el = document.querySelector('#inbox-messages [data-inbox-id="' + msgId + '"] .msg-ticks');
+      if (!el) return;
+      el.outerHTML = ticksHtml(status);
+    }
+
+    function inboxTime(ts) {
+      try {
+        return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function appendInboxMessage(msg, fromSelf) {
+      const box = document.getElementById('inbox-messages');
+      if (!box || !msg) return;
+      const mine = fromSelf != null ? fromSelf : !!msg.fromSelf;
+      const wrap = document.createElement('div');
+      wrap.className = 'flex ' + (mine ? 'justify-end' : 'justify-start');
+      wrap.dataset.inboxId = msg.id;
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble ' + (mine ? 'message-self' : 'message-stranger');
+      const text = document.createElement('div');
+      text.textContent = msg.text || '';
+      bubble.appendChild(text);
+      const meta = document.createElement('div');
+      meta.className = 'text-[10px] mt-1 flex items-center justify-end gap-1';
+      meta.innerHTML = '<span>' + escapeHtml(inboxTime(msg.at)) + '</span>' + (mine ? ticksHtml(msg.status || 'sent') : '');
+      bubble.appendChild(meta);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'msg-delete-btn';
+      del.title = 'Delete for both of you';
+      del.innerHTML = '<i class="fa-solid fa-trash"></i>';
+      del.onclick = (ev) => {
+        ev.stopPropagation();
+        if (!socket || !inboxPartnerEmail) return;
+        socket.emit('inbox-delete', { email: inboxPartnerEmail, msgId: msg.id });
+      };
+      bubble.appendChild(del);
+      wrap.appendChild(bubble);
+      box.appendChild(wrap);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function setInboxLimitUI(limit) {
+      const el = document.getElementById('inbox-limit-status');
+      const input = document.getElementById('inbox-input');
+      if (!el) return;
+      if (!limit || limit.unlimited) {
+        el.textContent = myAccount && myAccount.isOwner ? 'Owner: no message limit' : '';
+        if (input) input.disabled = false;
+        return;
+      }
+      if (!limit.ok || limit.remaining === 0) {
+        const when = limit.resetAt ? new Date(limit.resetAt).toLocaleString() : '48 hours';
+        el.textContent = '5/5 messages sent — wait for a reply, or try again after ' + when;
+        el.style.color = '#dc2626';
+        if (input) input.disabled = true;
+      } else {
+        el.textContent = (limit.used || 0) + '/5 messages until they reply (resets after a reply or 48 hours)';
+        el.style.color = '';
+        if (input) input.disabled = false;
+      }
+    }
+
+    function renderInboxThreadList(threads, activeEmail) {
+      const ul = document.getElementById('inbox-thread-list');
+      if (!ul) return;
+      inboxThreads = threads || [];
+      ul.innerHTML = '';
+      if (!inboxThreads.length) {
+        ul.innerHTML = '<li class="p-3 text-xs theme-muted">No conversations yet. Open Members and send a message.</li>';
+        return;
+      }
+      inboxThreads.forEach((t) => {
+        const li = document.createElement('li');
+        li.className = 'inbox-thread-item px-3 py-2 cursor-pointer border-b theme-border' + (t.partner === activeEmail ? ' is-active' : '');
+        li.innerHTML = `<div class="flex items-center justify-between gap-2">
+          <div class="font-medium text-sm truncate">${escapeHtml(t.displayName || t.partner)}</div>
+          ${t.unread ? '<span class="nav-unread-badge">' + t.unread + '</span>' : ''}
+        </div>
+        <div class="text-[11px] theme-muted truncate">${escapeHtml(t.lastText || '')}</div>
+        <div class="text-[10px] theme-muted">${escapeHtml(formatLastSeen(t.lastSeenAt || t.lastLoginAt, t.online, t.away))}</div>`;
+        li.onclick = () => openInboxModal(t.partner);
+        ul.appendChild(li);
+      });
+    }
+
+    function refreshInboxList() {
+      if (!socket) return;
+      socket.emit('inbox-list', (res) => {
+        if (res && res.ok) {
+          renderInboxThreadList(res.threads, inboxPartnerEmail);
+          if (typeof res.unread === 'number') setInboxUnread(res.unread);
+        }
+      });
+    }
+
+    function openInboxModal(partnerEmail) {
+      if (!myAccount || !myAccount.verified) {
+        openAccountModal();
+        return;
+      }
+      const modal = document.getElementById('inbox-modal');
+      const shell = document.getElementById('inbox-shell');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      refreshInboxList();
+      if (partnerEmail) {
+        inboxPartnerEmail = partnerEmail;
+        if (shell) shell.classList.add('is-thread');
+        loadInboxThread(partnerEmail);
+      } else {
+        inboxPartnerEmail = null;
+        if (shell) shell.classList.remove('is-thread');
+        const name = document.getElementById('inbox-partner-name');
+        const meta = document.getElementById('inbox-partner-meta');
+        if (name) name.textContent = 'Select a conversation';
+        if (meta) meta.textContent = '';
+        const msgs = document.getElementById('inbox-messages');
+        if (msgs) msgs.innerHTML = '';
+        ['inbox-friend-btn', 'inbox-report-btn', 'inbox-block-btn'].forEach((id) => {
+          const b = document.getElementById(id);
+          if (b) b.classList.add('hidden');
+        });
+      }
+    }
+
+    function closeInboxModal() {
+      const modal = document.getElementById('inbox-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function loadInboxThread(email) {
+      if (!socket || !email) return;
+      socket.emit('inbox-open', { email }, (res) => {
+        if (!res || !res.ok) {
+          alert((res && res.message) || 'Could not open conversation.');
+          return;
+        }
+        inboxPartnerEmail = email;
+        const name = document.getElementById('inbox-partner-name');
+        const meta = document.getElementById('inbox-partner-meta');
+        if (name) name.textContent = res.partnerDisplay || email;
+        if (meta) meta.textContent = formatLastSeen(res.lastSeenAt || res.lastLoginAt, res.online, res.away);
+        const box = document.getElementById('inbox-messages');
+        if (box) {
+          box.innerHTML = '';
+          (res.messages || []).forEach((m) => appendInboxMessage(m, !!m.fromSelf));
+        }
+        setInboxLimitUI(res.limit);
+        const friendBtn = document.getElementById('inbox-friend-btn');
+        const reportBtn = document.getElementById('inbox-report-btn');
+        const blockBtn = document.getElementById('inbox-block-btn');
+        if (friendBtn) {
+          friendBtn.classList.toggle('hidden', !!res.isFriend);
+          friendBtn.onclick = () => sendFriendRequestTo(email);
+        }
+        if (reportBtn) {
+          reportBtn.classList.remove('hidden');
+          reportBtn.onclick = () => {
+            const reportModal = document.getElementById('report-modal');
+            if (reportModal) {
+              reportModal.dataset.inboxEmail = email;
+              reportModal.classList.remove('hidden');
+            }
+          };
+        }
+        if (blockBtn) {
+          blockBtn.classList.remove('hidden');
+          blockBtn.onclick = () => {
+            if (!confirm('Block this member? They will not be able to message you in Inbox.')) return;
+            socket.emit('account-block', { email }, (r) => {
+              if (r && r.ok) {
+                myAccount = r.account || myAccount;
+                alert('User blocked.');
+                closeInboxModal();
+              } else {
+                alert((r && r.message) || 'Could not block.');
+              }
+            });
+          };
+        }
+        refreshInboxList();
+      });
+    }
+
+    function setupInboxModal() {
+      const modal = document.getElementById('inbox-modal');
+      const closeBtn = document.getElementById('inbox-modal-close');
+      const backBtn = document.getElementById('inbox-back-btn');
+      const newBtn = document.getElementById('inbox-new-btn');
+      const form = document.getElementById('inbox-form');
+      if (closeBtn) closeBtn.addEventListener('click', closeInboxModal);
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) closeInboxModal();
+        });
+      }
+      if (backBtn) {
+        backBtn.addEventListener('click', () => {
+          inboxPartnerEmail = null;
+          const shell = document.getElementById('inbox-shell');
+          if (shell) shell.classList.remove('is-thread');
+        });
+      }
+      if (newBtn) {
+        newBtn.addEventListener('click', () => {
+          closeInboxModal();
+          openAccountModal('people');
+        });
+      }
+      if (form) {
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          if (!socket || !inboxPartnerEmail) return;
+          const input = document.getElementById('inbox-input');
+          const text = input ? input.value : '';
+          const check = validateChatMessage(text);
+          if (!check.ok) {
+            alert(check.message || 'Invalid message');
+            return;
+          }
+          socket.emit('inbox-send', { email: inboxPartnerEmail, text: check.text }, (res) => {
+            if (!res || !res.ok) {
+              alert((res && res.message) || 'Could not send.');
+              if (res && res.resetAt) setInboxLimitUI(res);
+              return;
+            }
+            if (input) input.value = '';
+            appendInboxMessage(res.message, true);
+            setInboxLimitUI({
+              ok: res.unlimited || res.remaining > 0,
+              remaining: res.remaining,
+              unlimited: res.unlimited,
+              used: res.used
+            });
+          });
         });
       }
     }
@@ -2838,6 +3656,14 @@
         timeEl.className = `text-[10px] mt-1 ${isSelf ? 'text-right opacity-80' : 'theme-muted opacity-70'}`;
         if (isSelf) timeEl.style.color = 'rgba(42,35,28,0.75)';
         timeEl.textContent = time;
+        if (isSelf && msgId) {
+          const tick = document.createElement('span');
+          tick.className = 'msg-ticks';
+          tick.dataset.msgId = msgId;
+          tick.textContent = '✓';
+          tick.title = 'Sent';
+          timeEl.appendChild(tick);
+        }
         bubble.appendChild(timeEl);
       }
 
@@ -4164,15 +4990,14 @@
             showScreen('hub');
             saveSession();
             // Re-bind email account to new session token (for friends)
-            if (s && s.connected && accountEmailCache && accountPasswordCache) {
+            if (s && s.connected && accountAuthToken) {
+              restoreAccountSession();
+            } else if (s && s.connected && accountEmailCache && accountPasswordCache) {
               s.emit('account-login', {
                 email: accountEmailCache,
                 password: accountPasswordCache
               }, (res) => {
-                if (res && res.ok) {
-                  myAccount = res.account;
-                  updateAccountBtnLabel();
-                }
+                if (res && res.ok) applyLoggedInAccount(res.account, res.authToken);
               });
             }
             if (s && s.connected) {
@@ -4453,17 +5278,17 @@
           }
           const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
           const name = (chats[activeChatId] && chats[activeChatId].partnerProfile && chats[activeChatId].partnerProfile.username) || 'this user';
-          if (!confirm('Add ' + name + ' as a friend? They must also have a verified email account.')) return;
+          if (!confirm('Send ' + name + ' a friend request? They must also have a verified email account.')) return;
           socket.emit('friend-add', {
             targetId: activeChatId,
             targetSessionToken: partnerTok || null
           }, (res) => {
             if (!res || !res.ok) {
-              alert((res && res.message) || 'Could not add friend.');
+              alert((res && res.message) || 'Could not send friend request.');
               return;
             }
             myAccount = res.account || myAccount;
-            alert(res.message || 'Friend added!');
+            alert(res.message || 'Friend request sent.');
             refreshFriendsListUI();
             updateAccountBtnLabel();
           });
@@ -4557,22 +5382,26 @@
       }
       if (reportSubmit) {
         reportSubmit.addEventListener('click', () => {
-          if (!socket || !activeChatId) return;
+          const inboxEmail = reportModal && reportModal.dataset.inboxEmail;
+          if (!socket || (!activeChatId && !inboxEmail)) return;
           const reason = (document.getElementById('report-reason') || {}).value || 'other';
           const details = (document.getElementById('report-details') || {}).value || '';
-          const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
-          const targetName = chats[activeChatId] && chats[activeChatId].partnerProfile
+          const partnerTok = activeChatId && chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+          const targetName = activeChatId && chats[activeChatId] && chats[activeChatId].partnerProfile
             ? chats[activeChatId].partnerProfile.username
-            : null;
+            : inboxEmail;
           socket.emit('report-user', {
-            targetId: activeChatId,
+            targetId: activeChatId || inboxEmail,
             targetSessionToken: partnerTok,
             targetName,
             reason,
             details
           }, (res) => {
             alert((res && res.message) || 'Report submitted.');
-            if (reportModal) reportModal.classList.add('hidden');
+            if (reportModal) {
+              reportModal.classList.add('hidden');
+              delete reportModal.dataset.inboxEmail;
+            }
           });
         });
       }

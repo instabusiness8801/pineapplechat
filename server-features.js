@@ -52,6 +52,11 @@ function saveReports() {
   }
 }
 
+function getReports(limit) {
+  const n = Math.max(1, Math.min(Number(limit) || 200, 500));
+  return reports.slice(-n).reverse();
+}
+
 function addReport({ reporterId, reporterToken, reporterName, targetId, targetToken, targetName, reason, details }) {
   const entry = {
     id: crypto.randomBytes(8).toString('hex'),
@@ -239,6 +244,7 @@ loadReports();
 module.exports = {
   rateLimit,
   addReport,
+  getReports,
   toggleReaction,
   reactionSnapshot,
   registerMessageOwner,

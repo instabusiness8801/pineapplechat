@@ -101,7 +101,12 @@ const required = [
   ['18–99', 'age gate copy'],
   ['pineapplechat-session', 'session restore key'],
   ['age-datalist', 'typeable age list'],
-  ['country-datalist', 'typeable country list']
+  ['country-datalist', 'typeable country list'],
+  ['inbox-btn', 'inbox button'],
+  ['inbox-modal', 'inbox modal'],
+  ['pineapplechat-auth', 'account auth persist key'],
+  ['people-list', 'registered users list'],
+  ['admin-tab-btn', 'owner admin tab']
 ];
 for (const [needle, label] of required) {
   if (!html.includes(needle)) {

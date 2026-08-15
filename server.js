@@ -6,8 +6,10 @@ const fs = require('fs');
 const vm = require('vm');
 const crypto = require('crypto');
 const safety = require(path.join(__dirname, 'public', 'content-safety.js'));
+const mail = require(path.join(__dirname, 'server-mail.js'));
 const accounts = require(path.join(__dirname, 'server-accounts.js'));
 const features = require(path.join(__dirname, 'server-features.js'));
+const inbox = require(path.join(__dirname, 'server-inbox.js'));
 
 const app = express();
 const server = http.createServer(app);
@@ -32,9 +34,13 @@ app.get('/api/config', (req, res) => {
     minAge: safety.MIN_AGE || 18,
     sessionGraceMs: SESSION_GRACE_MS,
     emailConfigured: accounts.emailConfigured(),
+    ownerEmailHint: accounts.ownerEmail() ? true : false,
     features: {
       block: true,
       friends: true,
+      friendRequests: true,
+      inbox: true,
+      registeredUsers: true,
       reply: true,
       reactions: true,
       readReceipts: true,
@@ -263,6 +269,8 @@ function forceLogoutSocket(socket, reason) {
   const token = resolveSessionTokenForSocket(socket);
   let removed = null;
   if (token) {
+    const email = socket && socket.accountEmail;
+    if (email) accounts.touchLastSeen(email);
     accounts.unbindSession(token);
     removed = removeSession(token, reason || 'logout');
   }
@@ -380,6 +388,29 @@ function flushPendingSoon(sess) {
   setTimeout(() => {
     flushPending(sess);
   }, 400);
+}
+
+function emitToEmail(email, event, payload) {
+  const target = String(email || '').toLowerCase();
+  if (!target) return 0;
+  let n = 0;
+  for (const sock of io.sockets.sockets.values()) {
+    if (!sock.connected) continue;
+    if (sock.accountEmail === target) {
+      sock.emit(event, payload);
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function isAccountSocketOnline(email) {
+  const target = String(email || '').toLowerCase();
+  if (!target) return false;
+  for (const sock of io.sockets.sockets.values()) {
+    if (sock.connected && sock.accountEmail === target) return true;
+  }
+  return false;
 }
 
 io.on('connection', (socket) => {
@@ -571,6 +602,11 @@ io.on('connection', (socket) => {
     socket.profile = cleanedProfile;
     socket.sessionToken = token;
     socket.intentionalLogout = false; // joined / re-joined after log off
+
+    if (socket.accountEmail) {
+      accounts.bindSession(token, socket.accountEmail);
+      accounts.setDisplayName(socket.accountEmail, cleanedProfile.username);
+    }
 
     socket.emit('profile-accepted', {
       id: socket.id,
@@ -869,95 +905,72 @@ io.on('connection', (socket) => {
     broadcastOnlineUsers();
   });
 
-  // ---- Email account + friends ----
-  socket.on('account-register', async (data, ack) => {
-    const rl = features.rateLimit('reg:' + (socket.handshake.address || socket.id), 8, 15 * 60 * 1000);
-    if (!rl.ok) {
-      if (typeof ack === 'function') ack(rl);
-      return;
+  // ---- Email account + friends + inbox ----
+  function sessionTokenOfSocket() {
+    return socket.sessionToken || socketToSession.get(socket.id) || null;
+  }
+
+  function pickAck(a, b) {
+    if (typeof a === 'function') return a;
+    if (typeof b === 'function') return b;
+    return null;
+  }
+
+  function accountEmailOfSocket() {
+    return socket.accountEmail || accounts.getEmailForSession(sessionTokenOfSocket()) || null;
+  }
+
+  function requireVerifiedAccount() {
+    const email = accountEmailOfSocket();
+    if (!email) return null;
+    const acc = accounts.getAccountByEmail(email);
+    if (!acc || !acc.verified) return null;
+    const token = sessionTokenOfSocket() || socket.id;
+    accounts.bindSession(token, email);
+    return { email, acc, token };
+  }
+
+  function bindAccountToSocket(email) {
+    const em = String(email || '').trim().toLowerCase();
+    if (!em) return;
+    socket.accountEmail = em;
+    const token = sessionTokenOfSocket();
+    if (token) accounts.bindSession(token, em);
+    if (socket.profile && socket.profile.username) {
+      accounts.setDisplayName(em, socket.profile.username);
     }
-    const result = await accounts.register(data && data.email, data && data.password);
-    if (typeof ack === 'function') ack(result);
-    else socket.emit('account-result', { action: 'register', ...result });
-  });
+  }
 
-  socket.on('account-verify', (data, ack) => {
-    const result = accounts.verify(data && data.email, data && data.code);
-    if (result.ok) {
-      const token = socket.sessionToken || socketToSession.get(socket.id);
-      if (token) accounts.bindSession(token, data.email);
-      socket.accountEmail = String(data.email || '').trim().toLowerCase();
-    }
-    if (typeof ack === 'function') ack(result);
-    else socket.emit('account-result', { action: 'verify', ...result });
-  });
-
-  socket.on('account-login', async (data, ack) => {
-    const rl = features.rateLimit('login:' + (socket.handshake.address || socket.id), 20, 15 * 60 * 1000);
-    if (!rl.ok) {
-      if (typeof ack === 'function') ack(rl);
-      return;
-    }
-    const result = await accounts.login(data && data.email, data && data.password);
-    if (result.ok) {
-      const token = socket.sessionToken || socketToSession.get(socket.id);
-      if (token) accounts.bindSession(token, data.email);
-      socket.accountEmail = String(data.email || '').trim().toLowerCase();
-    }
-    if (typeof ack === 'function') ack(result);
-    else socket.emit('account-result', { action: 'login', ...result });
-  });
-
-  socket.on('account-resend-code', async (data, ack) => {
-    const result = await accounts.resendCode(data && data.email);
-    if (typeof ack === 'function') ack(result);
-  });
-
-  socket.on('account-status', (ack) => {
-    const token = socket.sessionToken || socketToSession.get(socket.id);
-    const acc = accounts.getAccountForSession(token);
-    const payload = {
-      ok: !!acc,
-      account: acc ? accounts.publicAccount(acc) : null,
-      emailConfigured: accounts.emailConfigured()
-    };
-    if (typeof ack === 'function') ack(payload);
-    else socket.emit('account-status', payload);
-  });
-
-  socket.on('friend-add', (data, ack) => {
-    const token = socket.sessionToken || socketToSession.get(socket.id);
-    const targetId = data && (data.targetId || data.targetSessionToken);
-    const result = accounts.addFriend(token, targetId, (idOrTok) => {
-      const { session: tSess } = resolveLiveSocketForTarget(idOrTok);
-      if (!tSess) {
-        const s = getSessionByToken(idOrTok);
-        if (s) {
-          const t = sessionTokenOf(s);
-          return accounts.getEmailForSession(t);
-        }
-        return null;
-      }
+  function resolveAccountEmail(raw) {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return s.toLowerCase();
+    const { session: tSess } = resolveLiveSocketForTarget(s);
+    if (tSess) {
       const t = sessionTokenOf(tSess);
-      return accounts.getEmailForSession(t);
-    });
-    if (result.ok && result.targetEmail) {
-      for (const sock of io.sockets.sockets.values()) {
-        if (!sock.connected) continue;
-        const t = sock.sessionToken || socketToSession.get(sock.id);
-        if (accounts.getEmailForSession(t) === result.targetEmail) {
-          sock.emit('friend-added', {
-            email: accounts.getEmailForSession(token),
-            message: 'Someone added you as a friend.'
-          });
-        }
-      }
+      const em = accounts.getEmailForSession(t);
+      if (em) return em;
     }
-    if (typeof ack === 'function') ack(result);
-    else socket.emit('friend-result', result);
-  });
+    const byTok = getSessionByToken(s);
+    if (byTok) {
+      const em = accounts.getEmailForSession(sessionTokenOf(byTok));
+      if (em) return em;
+    }
+    return accounts.getEmailForSession(s);
+  }
 
   function friendPresenceForEmail(email) {
+    if (isAccountSocketOnline(email)) {
+      const tok = accounts.findSessionTokenForEmail(email);
+      const sess = tok ? getSessionByToken(tok) : null;
+      return {
+        online: true,
+        away: false,
+        username: (sess && sess.profile && sess.profile.username) || null,
+        sessionToken: tok || null,
+        socketId: (sess && sess.socketId) || null
+      };
+    }
     const tok = accounts.findSessionTokenForEmail(email);
     if (!tok) return null;
     const sess = getSessionByToken(tok);
@@ -974,11 +987,361 @@ io.on('connection', (socket) => {
     };
   }
 
-  socket.on('friend-list', (ack) => {
-    const token = socket.sessionToken || socketToSession.get(socket.id);
-    const result = accounts.listFriendsWithPresence(token, friendPresenceForEmail);
+  function pushUnread(email) {
+    emitToEmail(email, 'inbox-unread', { count: inbox.unreadCount(email) });
+  }
+
+  socket.on('account-register', async (data, ack) => {
+    const rl = features.rateLimit('reg:' + (socket.handshake.address || socket.id), 8, 15 * 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const result = await accounts.register(data && data.email, data && data.password);
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('account-result', { action: 'register', ...result });
+  });
+
+  socket.on('account-verify', (data, ack) => {
+    const result = accounts.verify(data && data.email, data && data.code);
+    if (result.ok) {
+      bindAccountToSocket(data.email);
+      accounts.touchLastLogin(data.email);
+    }
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('account-result', { action: 'verify', ...result });
+  });
+
+  socket.on('account-login', async (data, ack) => {
+    const rl = features.rateLimit('login:' + (socket.handshake.address || socket.id), 20, 15 * 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const result = await accounts.login(data && data.email, data && data.password);
+    if (result.ok) {
+      bindAccountToSocket(data.email);
+    }
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('account-result', { action: 'login', ...result });
+  });
+
+  socket.on('account-restore', (data, ack) => {
+    const result = accounts.restoreAuth(data && data.token);
+    if (result.ok && result.account) {
+      bindAccountToSocket(result.account.email);
+      accounts.touchLastSeen(result.account.email);
+      result.unread = inbox.unreadCount(result.account.email);
+    }
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-resend-code', async (data, ack) => {
+    const result = await accounts.resendCode(data && data.email);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-logout', (data, ack) => {
+    const email = accountEmailOfSocket();
+    const token = sessionTokenOfSocket();
+    if (email) accounts.touchLastSeen(email);
+    accounts.unbindSession(token);
+    if (data && data.authToken) accounts.revokeAuthToken(data.authToken);
+    else if (email) accounts.revokeAuthTokensForEmail(email);
+    socket.accountEmail = null;
+    if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('account-status', (data, ack) => {
+    ack = pickAck(data, ack);
+    const email = accountEmailOfSocket();
+    const acc = email ? accounts.getAccountByEmail(email) : null;
+    const payload = {
+      ok: !!(acc && acc.verified),
+      account: acc && acc.verified ? accounts.publicAccount(acc) : null,
+      emailConfigured: accounts.emailConfigured(),
+      unread: email ? inbox.unreadCount(email) : 0,
+      isOwner: !!(acc && accounts.isOwner(acc.email))
+    };
+    if (typeof ack === 'function') ack(payload);
+    else socket.emit('account-status', payload);
+  });
+
+  socket.on('friend-add', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const token = me ? me.token : sessionTokenOfSocket();
+    const targetRaw = (data && (data.email || data.targetEmail || data.targetId || data.targetSessionToken)) || null;
+    const result = accounts.sendFriendRequest(token, targetRaw, resolveAccountEmail);
+    if (result.ok && result.targetEmail) {
+      const fromEmail = accountEmailOfSocket();
+      if (result.alreadyFriends) {
+        emitToEmail(result.targetEmail, 'friend-added', {
+          email: fromEmail,
+          message: 'You are friends now.'
+        });
+      } else if (result.pending) {
+        emitToEmail(result.targetEmail, 'friend-request', {
+          email: fromEmail,
+          displayName: (socket.profile && socket.profile.username) || (fromEmail && fromEmail.split('@')[0]),
+          message: 'Someone sent you a friend request.'
+        });
+      }
+    }
+    if (typeof ack === 'function') ack(result);
+    else socket.emit('friend-result', result);
+  });
+
+  socket.on('friend-accept', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const result = accounts.acceptFriendRequest(me ? me.token : sessionTokenOfSocket(), data && (data.email || data.fromEmail));
+    if (result.ok && result.targetEmail) {
+      emitToEmail(result.targetEmail, 'friend-added', {
+        email: accountEmailOfSocket(),
+        message: 'Your friend request was accepted.'
+      });
+    }
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('friend-decline', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const result = accounts.declineFriendRequest(me ? me.token : sessionTokenOfSocket(), data && (data.email || data.fromEmail));
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('friend-remove', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const result = accounts.removeFriend(me ? me.token : sessionTokenOfSocket(), data && (data.email || data.friendEmail));
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('friend-list', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    const result = accounts.listFriendsWithPresence(me ? me.token : sessionTokenOfSocket(), friendPresenceForEmail);
     if (typeof ack === 'function') ack(result);
     else socket.emit('friend-list', result);
+  });
+
+  socket.on('friend-requests', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    const result = accounts.listFriendRequests(me ? me.token : sessionTokenOfSocket(), friendPresenceForEmail);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('users-list', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    const result = accounts.listRegisteredUsers(me ? me.token : sessionTokenOfSocket(), friendPresenceForEmail);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('admin-users', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    const result = accounts.listAllUsersAdmin(me ? me.token : sessionTokenOfSocket(), friendPresenceForEmail);
+    if (result.ok) {
+      result.reports = features.getReports(100);
+    }
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-block', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const result = accounts.blockAccount(me ? me.token : sessionTokenOfSocket(), data && (data.email || data.targetEmail));
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-unblock', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const result = accounts.unblockAccount(me ? me.token : sessionTokenOfSocket(), data && (data.email || data.targetEmail));
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-blocked-list', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    const result = accounts.listBlockedAccounts(me ? me.token : sessionTokenOfSocket());
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('inbox-list', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    if (!me) {
+      if (typeof ack === 'function') ack({ ok: false, threads: [], message: 'Log in to use Inbox.' });
+      return;
+    }
+    const threads = inbox.listThreads(me.email, (partner) => {
+      const p = friendPresenceForEmail(partner) || {};
+      const acc = accounts.getAccountByEmail(partner);
+      return {
+        displayName: (acc && acc.displayName) || (p.username) || (partner && partner.split('@')[0]),
+        online: !!p.online,
+        away: !!p.away,
+        lastSeenAt: acc ? acc.lastSeenAt : null,
+        lastLoginAt: acc ? acc.lastLoginAt : null
+      };
+    });
+    if (typeof ack === 'function') {
+      ack({ ok: true, threads, unread: inbox.unreadCount(me.email), isOwner: accounts.isOwner(me.email) });
+    }
+  });
+
+  socket.on('inbox-open', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const partner = resolveAccountEmail((data && (data.email || data.partnerEmail)) || '');
+    if (!me) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Log in to use Inbox.' });
+      return;
+    }
+    if (!partner) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'User not found.' });
+      return;
+    }
+    if (!accounts.isOwner(me.email) && accounts.isBlockedAccount(me.email, partner)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'You cannot open this conversation.' });
+      return;
+    }
+    const thread = inbox.getThread(me.email, partner);
+    const marked = inbox.markThreadRead(me.email, partner);
+    if (marked.ok && marked.newlyRead && marked.newlyRead.length) {
+      emitToEmail(partner, 'inbox-read', {
+        reader: me.email,
+        ids: marked.newlyRead,
+        at: marked.at
+      });
+    }
+    const acc = accounts.getAccountByEmail(partner);
+    const p = friendPresenceForEmail(partner) || {};
+    const lim = inbox.limitStatus(me.email, partner, accounts.isOwner);
+    pushUnread(me.email);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        ...thread,
+        partnerDisplay: (acc && acc.displayName) || p.username || partner.split('@')[0],
+        online: !!p.online,
+        away: !!p.away,
+        lastSeenAt: acc ? acc.lastSeenAt : null,
+        lastLoginAt: acc ? acc.lastLoginAt : null,
+        isFriend: !!(me.acc.friends || []).includes(partner),
+        blocked: accounts.isBlockedAccount(me.email, partner),
+        limit: lim,
+        isOwner: accounts.isOwner(me.email)
+      });
+    }
+  });
+
+  socket.on('inbox-send', async (data, ack) => {
+    const me = requireVerifiedAccount();
+    if (!me) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Log in to use Inbox.' });
+      return;
+    }
+    const partner = resolveAccountEmail((data && (data.email || data.partnerEmail || data.to)) || '');
+    if (!partner) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'User not found.' });
+      return;
+    }
+    const targetAcc = accounts.getAccountByEmail(partner);
+    if (!targetAcc || !targetAcc.verified) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'That user is not a registered member.' });
+      return;
+    }
+    if (!accounts.isOwner(me.email) && accounts.isBlockedAccount(me.email, partner)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'You cannot message this user.' });
+      return;
+    }
+    const textCheck = safety.validateChatText ? safety.validateChatText(data && data.text) : { ok: true, text: String((data && data.text) || '').trim() };
+    if (!textCheck.ok) {
+      if (typeof ack === 'function') ack({ ok: false, message: textCheck.message || 'Message not allowed.' });
+      return;
+    }
+    const rl = features.rateLimit('inbox:' + me.email, accounts.isOwner(me.email) ? 500 : 40, 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const fromName = (me.acc.displayName) || (socket.profile && socket.profile.username) || me.email.split('@')[0];
+    const result = inbox.sendMessage({
+      fromEmail: me.email,
+      toEmail: partner,
+      text: textCheck.text || (data && data.text),
+      isOwnerFn: accounts.isOwner,
+      fromName
+    });
+    if (!result.ok) {
+      if (typeof ack === 'function') ack(result);
+      return;
+    }
+
+    const liveCount = emitToEmail(partner, 'inbox-new', {
+      threadId: result.threadId,
+      message: { ...result.message, fromSelf: false },
+      from: me.email,
+      fromName,
+      unread: inbox.unreadCount(partner)
+    });
+    if (liveCount > 0) {
+      inbox.markDelivered(result.message.id, result.threadId);
+      result.message.status = 'delivered';
+      emitToEmail(me.email, 'inbox-delivered', { id: result.message.id, partner });
+    } else if (inbox.shouldEmailNotify(partner, result.threadId)) {
+      mail.sendInboxNotification(partner, fromName, result.message.text).catch((e) => {
+        console.warn('[inbox] notify email failed:', e.message);
+      });
+    }
+    pushUnread(partner);
+    pushUnread(me.email);
+    if (typeof ack === 'function') {
+      ack({
+        ok: true,
+        message: { ...result.message, fromSelf: true },
+        remaining: result.remaining,
+        unlimited: result.unlimited,
+        used: result.used
+      });
+    }
+  });
+
+  socket.on('inbox-mark-read', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const partner = resolveAccountEmail((data && (data.email || data.partnerEmail)) || '');
+    if (!me || !partner) {
+      if (typeof ack === 'function') ack({ ok: false });
+      return;
+    }
+    const marked = inbox.markThreadRead(me.email, partner);
+    if (marked.ok && marked.newlyRead && marked.newlyRead.length) {
+      emitToEmail(partner, 'inbox-read', { reader: me.email, ids: marked.newlyRead, at: marked.at });
+    }
+    pushUnread(me.email);
+    if (typeof ack === 'function') ack(marked);
+  });
+
+  socket.on('inbox-delete', (data, ack) => {
+    const me = requireVerifiedAccount();
+    const partner = resolveAccountEmail((data && (data.email || data.partnerEmail)) || '');
+    const msgId = data && data.msgId;
+    if (!me || !partner || !msgId) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Missing message.' });
+      return;
+    }
+    const result = inbox.deleteMessage(me.email, msgId, partner);
+    if (result.ok) {
+      emitToEmail(partner, 'inbox-deleted', { msgId, partner: me.email });
+      socket.emit('inbox-deleted', { msgId, partner });
+    }
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('inbox-unread', (data, ack) => {
+    ack = pickAck(data, ack);
+    const me = requireVerifiedAccount();
+    const count = me ? inbox.unreadCount(me.email) : 0;
+    if (typeof ack === 'function') ack({ ok: !!me, count });
   });
 
   // ---- Report ----
@@ -1182,6 +1545,10 @@ io.on('connection', (socket) => {
     const sess = token ? sessions.get(token) : null;
 
     // If already removed via logout, nothing left to grace
+    if (socket.accountEmail) {
+      accounts.touchLastSeen(socket.accountEmail);
+    }
+
     if (sess) {
       sess.disconnectedAt = Date.now();
       // Keep socketId so list/chat remapping still works until grace ends
@@ -1242,8 +1609,11 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
+  const mailInfo = mail.mailStatus();
   console.log(`\nPineappleChat running on http://localhost:${PORT}`);
   console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON' : 'OFF'}`);
   console.log(`Session grace: ${SESSION_GRACE_MS / 1000}s after disconnect`);
+  console.log(`Email: ${mailInfo.configured ? 'CONFIGURED (' + mailInfo.provider + ')' : 'NOT CONFIGURED — set RESEND_API_KEY or SMTP_* to send verification codes'}`);
+  console.log(`Owner: ${accounts.ownerEmail()}`);
   console.log('Open that URL in your browser to start chatting!\n');
 });
