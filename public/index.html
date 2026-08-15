@@ -855,7 +855,8 @@
     }
     #account-modal:not(.hidden),
     #report-modal:not(.hidden),
-    #inbox-modal:not(.hidden) {
+    #inbox-modal:not(.hidden),
+    #settings-modal:not(.hidden) {
       display: flex !important;
     }
     .acct-tab.is-active-acct {
@@ -1031,6 +1032,12 @@
                 aria-label="Account">
           <i class="fa-solid fa-envelope text-sm"></i>
           <span class="hidden sm:inline" id="account-btn-label">Account</span>
+        </button>
+        <button type="button" id="settings-btn" title="Settings"
+                class="hidden items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-amber-50 transition min-h-[36px]"
+                aria-label="Settings">
+          <i class="fa-solid fa-gear text-sm"></i>
+          <span class="hidden sm:inline">Settings</span>
         </button>
 
         <button type="button" id="logout-btn" title="Log off"
@@ -1432,22 +1439,22 @@
           <button type="button" data-auth-tab="login" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Login</button>
           <button type="button" data-auth-tab="verify" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Verify code</button>
         </div>
-        <div id="auth-panel-register" class="auth-panel space-y-2">
-          <input id="reg-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
-          <input id="reg-password" type="password" placeholder="Password (min 6)" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
-          <button type="button" id="reg-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Create account</button>
-        </div>
-        <div id="auth-panel-login" class="auth-panel space-y-2 hidden">
-          <input id="login-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
-          <input id="login-password" type="password" placeholder="Password" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
-          <button type="button" id="login-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Log in</button>
-        </div>
-        <div id="auth-panel-verify" class="auth-panel space-y-2 hidden">
-          <input id="verify-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
-          <input id="verify-code" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none tracking-widest">
-          <button type="button" id="verify-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Confirm email</button>
+        <form id="auth-panel-register" class="auth-panel space-y-2">
+          <input id="reg-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="email">
+          <input id="reg-password" type="password" placeholder="Password (min 6)" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="new-password">
+          <button type="submit" id="reg-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Create account</button>
+        </form>
+        <form id="auth-panel-login" class="auth-panel space-y-2 hidden">
+          <input id="login-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="username">
+          <input id="login-password" type="password" placeholder="Password" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="current-password">
+          <button type="submit" id="login-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Log in</button>
+        </form>
+        <form id="auth-panel-verify" class="auth-panel space-y-2 hidden">
+          <input id="verify-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="email">
+          <input id="verify-code" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none tracking-widest" autocomplete="one-time-code">
+          <button type="submit" id="verify-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Confirm email</button>
           <button type="button" id="resend-code-btn" class="w-full text-xs theme-muted py-1">Resend code</button>
-        </div>
+        </form>
         <div id="auth-dev-code" class="hidden text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800"></div>
         <div id="auth-status" class="text-xs theme-muted"></div>
       </div>
@@ -1457,38 +1464,13 @@
           <span id="owner-badge" class="hidden text-[10px] ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">Owner</span>
         </div>
         <div class="flex flex-wrap gap-1 text-[11px]" id="account-tabs">
-          <button type="button" data-acct-tab="profile" class="acct-tab px-2.5 py-1 rounded-lg border theme-border is-active-acct">Profile</button>
-          <button type="button" data-acct-tab="friends" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Friends</button>
+          <button type="button" data-acct-tab="friends" class="acct-tab px-2.5 py-1 rounded-lg border theme-border is-active-acct">Friends</button>
           <button type="button" data-acct-tab="people" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">People</button>
           <button type="button" data-acct-tab="requests" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Requests <span id="request-badge" class="hidden nav-unread-badge align-middle">0</span></button>
           <button type="button" data-acct-tab="blocked" class="acct-tab px-2.5 py-1 rounded-lg border theme-border">Blocked</button>
           <button type="button" data-acct-tab="admin" id="admin-tab-btn" class="acct-tab hidden px-2.5 py-1 rounded-lg border theme-border">Admin</button>
         </div>
-        <div id="acct-panel-profile" class="acct-panel space-y-2">
-          <p class="text-[10px] theme-muted">This is what other members see. Pick an avatar or upload a photo.</p>
-          <input id="member-display-name" type="text" maxlength="24" placeholder="Display name" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
-          <div class="flex gap-2">
-            <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="male" class="mr-1"> Male</label>
-            <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="female" class="mr-1"> Female</label>
-          </div>
-          <div class="text-[11px] font-semibold theme-text-strong">Male avatars</div>
-          <div id="member-avatars-male" class="flex flex-wrap gap-1.5"></div>
-          <div class="text-[11px] font-semibold theme-text-strong">Female avatars</div>
-          <div id="member-avatars-female" class="flex flex-wrap gap-1.5"></div>
-          <div class="flex items-center gap-2">
-            <button type="button" id="member-photo-btn" class="text-[11px] px-2 py-1 rounded-lg border theme-border">Upload photo</button>
-            <input id="member-photo-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
-            <span id="member-photo-hint" class="text-[10px] theme-muted">JPG, PNG or WebP · Max 1MB</span>
-          </div>
-          <input id="member-country" type="text" placeholder="Country" list="country-datalist" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
-          <input id="member-city" type="text" placeholder="City" list="member-city-datalist" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
-          <datalist id="member-city-datalist"></datalist>
-          <div class="text-[11px] font-semibold theme-text-strong">Interests (up to 5)</div>
-          <div id="member-interest-chips" class="flex flex-wrap gap-1"></div>
-          <button type="button" id="member-profile-save" class="w-full btn-primary-g py-2 rounded-xl text-sm">Save profile</button>
-          <div id="member-profile-status" class="text-[11px] theme-muted"></div>
-        </div>
-        <div id="acct-panel-friends" class="acct-panel hidden">
+        <div id="acct-panel-friends" class="acct-panel">
           <div class="text-xs font-semibold theme-text-strong mb-1">Friends <span class="font-normal theme-muted">(online first)</span></div>
           <ul id="friends-list" class="text-xs space-y-1 theme-muted max-h-52 overflow-y-auto"></ul>
           <p class="text-[10px] theme-muted mt-1">Send a friend request from People, or tap <strong>Friend</strong> in a live chat. Inbox messages stay even if they are offline.</p>
@@ -1514,7 +1496,47 @@
           <div class="text-xs font-semibold theme-text-strong mt-2">Recent reports</div>
           <ul id="admin-reports-list" class="text-[11px] space-y-1 theme-muted max-h-32 overflow-y-auto"></ul>
         </div>
-        <button type="button" id="account-logout-email" class="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5">Sign out of email account</button>
+        <button type="button" id="account-logout-email" class="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5">Log out</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold theme-text-strong">Settings</h2>
+        <button type="button" id="settings-modal-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
+      </div>
+      <form id="member-profile-form" class="space-y-2">
+        <p class="text-[10px] theme-muted">This is what other members see. Pick an avatar or upload a photo.</p>
+        <input id="member-display-name" type="text" maxlength="24" placeholder="Display name" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+        <div class="flex gap-2">
+          <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="male" class="mr-1"> Male</label>
+          <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="female" class="mr-1"> Female</label>
+        </div>
+        <div class="text-[11px] font-semibold theme-text-strong">Male avatars</div>
+        <div id="member-avatars-male" class="flex flex-wrap gap-1.5"></div>
+        <div class="text-[11px] font-semibold theme-text-strong">Female avatars</div>
+        <div id="member-avatars-female" class="flex flex-wrap gap-1.5"></div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="member-photo-btn" class="text-[11px] px-2 py-1 rounded-lg border theme-border">Upload photo</button>
+          <input id="member-photo-input" type="file" accept="image/jpeg,image/png,image/webp" class="hidden">
+          <span id="member-photo-hint" class="text-[10px] theme-muted">JPG, PNG or WebP · Max 1MB</span>
+        </div>
+        <input id="member-country" type="text" placeholder="Country" list="country-datalist" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
+        <input id="member-city" type="text" placeholder="City" list="member-city-datalist" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
+        <datalist id="member-city-datalist"></datalist>
+        <div class="text-[11px] font-semibold theme-text-strong">Interests (up to 5)</div>
+        <div id="member-interest-chips" class="flex flex-wrap gap-1"></div>
+        <button type="submit" id="member-profile-save" class="w-full btn-primary-g py-2 rounded-xl text-sm">Save profile</button>
+        <div id="member-profile-status" class="text-[11px] theme-muted"></div>
+      </form>
+      <div class="mt-5 pt-4 border-t theme-border space-y-2">
+        <div class="text-xs font-semibold text-red-600">Delete account</div>
+        <p class="text-[10px] theme-muted">This cannot be undone. Your profile, friends, and inbox threads are removed.</p>
+        <input id="delete-account-password" type="password" placeholder="Confirm with your password" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="current-password">
+        <button type="button" id="delete-account-btn" class="w-full text-xs text-red-600 border border-red-200 rounded-lg px-3 py-2">Delete my account</button>
+        <div id="delete-account-status" class="text-[11px] theme-muted"></div>
       </div>
     </div>
   </div>
@@ -1956,9 +1978,14 @@
     function updateLogoutButtonVisibility() {
       const btn = document.getElementById('logout-btn');
       if (!btn) return;
-      if (currentProfile && currentState === 'hub') {
+      const emailOn = !!(myAccount && myAccount.verified);
+      const hubOn = !!(currentProfile && currentState === 'hub');
+      if (emailOn || hubOn) {
         btn.classList.remove('hidden');
         btn.classList.add('inline-flex');
+        const label = btn.querySelector('span');
+        if (label) label.textContent = emailOn && !hubOn ? 'Log out' : 'Log off';
+        btn.title = emailOn && !hubOn ? 'Log out of your account' : 'Log off';
       } else {
         btn.classList.add('hidden');
         btn.classList.remove('inline-flex');
@@ -2174,10 +2201,29 @@
     }
 
     /** @param {{ skipConfirm?: boolean }} [opts] */
+    function signOutEmailAccount() {
+      if (socket) socket.emit('account-logout', { authToken: accountAuthToken });
+      myAccount = null;
+      clearAuth();
+      setInboxUnread(0);
+      updateAccountBtnLabel();
+      closeSettingsModal();
+    }
+
     function logOff(opts) {
       const skipConfirm = opts && opts.skipConfirm;
+      const emailOnly = !!(myAccount && myAccount.verified) && !(currentProfile && currentState === 'hub');
       if (!skipConfirm) {
-        if (!confirm('Log off? You will leave the online list and clear this device session.')) return;
+        const msg = emailOnly
+          ? 'Log out of your account?'
+          : 'Log off? You will leave the online list and clear this device session.';
+        if (!confirm(msg)) return;
+      }
+      if (myAccount) signOutEmailAccount();
+      if (emailOnly) {
+        updateLoggedInChrome();
+        updateLogoutButtonVisibility();
+        return;
       }
 
       intentionalLogout = true;
@@ -2818,7 +2864,7 @@
 
     function updateLoggedInChrome() {
       const loggedIn = !!(myAccount && myAccount.verified);
-      ['inbox-btn', 'members-btn'].forEach((id) => {
+      ['inbox-btn', 'members-btn', 'settings-btn'].forEach((id) => {
         const el = document.getElementById(id);
         if (!el) return;
         el.classList.toggle('hidden', !loggedIn);
@@ -2828,6 +2874,7 @@
       if (badge) badge.classList.toggle('hidden', !(myAccount && myAccount.isOwner));
       const adminTab = document.getElementById('admin-tab-btn');
       if (adminTab) adminTab.classList.toggle('hidden', !(myAccount && myAccount.isOwner));
+      updateLogoutButtonVisibility();
     }
 
     function setInboxUnread(n) {
@@ -3061,34 +3108,36 @@
           reader.readAsDataURL(file);
         });
       }
-      if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
-          if (!socket) connectSocket();
-          const genderEl = document.querySelector('input[name="member-gender"]:checked');
-          const payload = {
-            displayName: (document.getElementById('member-display-name') || {}).value,
-            gender: genderEl ? genderEl.value : null,
-            country: (document.getElementById('member-country') || {}).value,
-            city: (document.getElementById('member-city') || {}).value,
-            interests: memberInterestsDraft.slice(),
-            image: memberImageDraft
-          };
-          const status = document.getElementById('member-profile-status');
-          const send = () => socket.emit('account-update-profile', payload, (res) => {
-            if (status) {
-              status.textContent = (res && res.message) || (res && res.ok ? 'Profile saved.' : 'Could not save.');
-              status.style.color = res && res.ok ? '' : '#dc2626';
-            }
-            if (res && res.ok && res.account) {
-              myAccount = res.account;
-              if (!res.message && status) status.textContent = 'Profile saved.';
-              loadPublicMembers();
-            }
-          });
-          if (socket.connected) send();
-          else socket.once('connect', send);
+      const form = document.getElementById('member-profile-form');
+      const saveProfile = (e) => {
+        if (e) e.preventDefault();
+        if (!socket) connectSocket();
+        const genderEl = document.querySelector('input[name="member-gender"]:checked');
+        const payload = {
+          displayName: (document.getElementById('member-display-name') || {}).value,
+          gender: genderEl ? genderEl.value : null,
+          country: (document.getElementById('member-country') || {}).value,
+          city: (document.getElementById('member-city') || {}).value,
+          interests: memberInterestsDraft.slice(),
+          image: memberImageDraft
+        };
+        const status = document.getElementById('member-profile-status');
+        const send = () => socket.emit('account-update-profile', payload, (res) => {
+          if (status) {
+            status.textContent = (res && res.message) || (res && res.ok ? 'Profile saved.' : 'Could not save.');
+            status.style.color = res && res.ok ? '' : '#dc2626';
+          }
+          if (res && res.ok && res.account) {
+            myAccount = res.account;
+            if (!res.message && status) status.textContent = 'Profile saved.';
+            loadPublicMembers();
+          }
         });
-      }
+        if (socket.connected) send();
+        else socket.once('connect', send);
+      };
+      if (form) form.addEventListener('submit', saveProfile);
+      else if (saveBtn) saveBtn.addEventListener('click', saveProfile);
     }
 
     function refreshFriendsListUI(friendsPayload) {
@@ -3194,7 +3243,6 @@
       document.querySelectorAll('.acct-panel').forEach((p) => p.classList.add('hidden'));
       const panel = document.getElementById('acct-panel-' + tab);
       if (panel) panel.classList.remove('hidden');
-      if (tab === 'profile') fillMemberProfileForm();
       if (tab === 'people') refreshPeopleUI();
       if (tab === 'requests') refreshRequestsUI();
       if (tab === 'admin') refreshAdminUI();
@@ -3436,7 +3484,7 @@
         refreshFriendsListUI();
         refreshBlockedListUI();
         refreshAccountLists();
-        switchAcctTab(tab || 'profile');
+        switchAcctTab(tab || 'friends');
       } else {
         if (loggedOut) loggedOut.classList.remove('hidden');
         if (loggedIn) loggedIn.classList.add('hidden');
@@ -3445,6 +3493,23 @@
 
     function closeAccountModal() {
       const modal = document.getElementById('account-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function openSettingsModal() {
+      if (!myAccount || !myAccount.verified) {
+        openAccountModal();
+        return;
+      }
+      closeAccountModal();
+      const modal = document.getElementById('settings-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      fillMemberProfileForm();
+    }
+
+    function closeSettingsModal() {
+      const modal = document.getElementById('settings-modal');
       if (modal) modal.classList.add('hidden');
     }
 
@@ -3491,9 +3556,11 @@
         btn.addEventListener('click', () => switchAuthTab(btn.dataset.authTab));
       });
 
+      const regForm = document.getElementById('auth-panel-register');
       const regSubmit = document.getElementById('reg-submit');
-      if (regSubmit) {
-        regSubmit.addEventListener('click', () => {
+      if (regForm || regSubmit) {
+        const onRegister = (e) => {
+          if (e) e.preventDefault();
           const email = (document.getElementById('reg-email') || {}).value;
           const password = (document.getElementById('reg-password') || {}).value;
           if (!email || !password) {
@@ -3534,16 +3601,20 @@
               });
             }
           }, 20000);
-        });
+        };
+        if (regForm) regForm.addEventListener('submit', onRegister);
+        else regSubmit.addEventListener('click', onRegister);
       }
 
+      const loginForm = document.getElementById('auth-panel-login');
       const loginSubmit = document.getElementById('login-submit');
-      if (loginSubmit) {
-        loginSubmit.addEventListener('click', () => {
+      if (loginForm || loginSubmit) {
+        const onLogin = (e) => {
+          if (e) e.preventDefault();
           if (!socket) connectSocket();
           const email = (document.getElementById('login-email') || {}).value;
           const password = (document.getElementById('login-password') || {}).value;
-          socket.emit('account-login', { email, password }, (res) => {
+          const sendLogin = () => socket.emit('account-login', { email, password }, (res) => {
             if (res && res.needsVerification) {
               accountEmailCache = email;
               accountPasswordCache = password;
@@ -3565,16 +3636,22 @@
             showAuthDevCode(null);
             openAccountModal();
           });
-        });
+          if (socket.connected) sendLogin();
+          else socket.once('connect', sendLogin);
+        };
+        if (loginForm) loginForm.addEventListener('submit', onLogin);
+        else loginSubmit.addEventListener('click', onLogin);
       }
 
+      const verifyForm = document.getElementById('auth-panel-verify');
       const verifySubmit = document.getElementById('verify-submit');
-      if (verifySubmit) {
-        verifySubmit.addEventListener('click', () => {
+      if (verifyForm || verifySubmit) {
+        const onVerify = (e) => {
+          if (e) e.preventDefault();
           if (!socket) connectSocket();
           const email = (document.getElementById('verify-email') || {}).value;
           const code = (document.getElementById('verify-code') || {}).value;
-          socket.emit('account-verify', { email, code }, (res) => {
+          const sendVerify = () => socket.emit('account-verify', { email, code }, (res) => {
             if (!res || !res.ok) {
               setAuthStatus((res && res.message) || 'Verification failed', true);
               return;
@@ -3588,9 +3665,13 @@
             }
             setAuthStatus(res.message || 'Verified! Your account is created.');
             showAuthDevCode(null);
-            openAccountModal('profile');
+            openSettingsModal();
           });
-        });
+          if (socket.connected) sendVerify();
+          else socket.once('connect', sendVerify);
+        };
+        if (verifyForm) verifyForm.addEventListener('submit', onVerify);
+        else verifySubmit.addEventListener('click', onVerify);
       }
 
       const resendBtn = document.getElementById('resend-code-btn');
@@ -3612,13 +3693,47 @@
       const emailLogout = document.getElementById('account-logout-email');
       if (emailLogout) {
         emailLogout.addEventListener('click', () => {
-          if (socket) socket.emit('account-logout', { authToken: accountAuthToken });
-          myAccount = null;
-          clearAuth();
-          setInboxUnread(0);
-          updateAccountBtnLabel();
+          signOutEmailAccount();
           openAccountModal();
-          setAuthStatus('Signed out of email account (chat profile may still be active).');
+          setAuthStatus('Logged out.');
+        });
+      }
+
+      const settingsBtn = document.getElementById('settings-btn');
+      if (settingsBtn) settingsBtn.addEventListener('click', () => openSettingsModal());
+      const settingsClose = document.getElementById('settings-modal-close');
+      const settingsModal = document.getElementById('settings-modal');
+      if (settingsClose) settingsClose.addEventListener('click', () => closeSettingsModal());
+      if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+          if (e.target === settingsModal) closeSettingsModal();
+        });
+      }
+      const deleteBtn = document.getElementById('delete-account-btn');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', () => {
+          const pw = (document.getElementById('delete-account-password') || {}).value;
+          const status = document.getElementById('delete-account-status');
+          if (!pw) {
+            if (status) { status.textContent = 'Enter your password to confirm.'; status.style.color = '#dc2626'; }
+            return;
+          }
+          if (!confirm('Delete your account permanently? This cannot be undone.')) return;
+          if (!socket) connectSocket();
+          const send = () => socket.emit('account-delete', { password: pw }, (res) => {
+            if (!res || !res.ok) {
+              if (status) {
+                status.textContent = (res && res.message) || 'Could not delete account.';
+                status.style.color = '#dc2626';
+              }
+              return;
+            }
+            signOutEmailAccount();
+            loadPublicMembers();
+            alert('Your account has been deleted.');
+          });
+          if (socket.connected) send();
+          else socket.once('connect', send);
         });
       }
 

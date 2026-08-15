@@ -69,6 +69,21 @@ function reload() {
   load();
 }
 
+function deleteThreadsForEmail(email) {
+  const me = String(email || '').toLowerCase();
+  if (!me) return 0;
+  let n = 0;
+  for (const id of Object.keys(store.threads)) {
+    const t = store.threads[id];
+    if (t && Array.isArray(t.participants) && t.participants.includes(me)) {
+      delete store.threads[id];
+      n += 1;
+    }
+  }
+  if (n) saveSoon();
+  return n;
+}
+
 function pairKey(a, b) {
   return [String(a || '').toLowerCase(), String(b || '').toLowerCase()].sort().join('|');
 }
@@ -324,5 +339,6 @@ module.exports = {
   pairKey,
   shouldEmailNotify,
   unansweredFrom,
-  reload
+  reload,
+  deleteThreadsForEmail
 };

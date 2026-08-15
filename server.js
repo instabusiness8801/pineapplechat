@@ -1168,6 +1168,21 @@ io.on('connection', (socket) => {
     if (typeof ack === 'function') ack(result);
   });
 
+  socket.on('account-delete', (data, ack) => {
+    const me = requireVerifiedAccount();
+    if (!me) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Please log in first.' });
+      return;
+    }
+    const result = accounts.deleteAccount(me.token, data && data.password);
+    if (result.ok) {
+      inbox.deleteThreadsForEmail(result.email);
+      socket.accountEmail = null;
+      io.emit('members-changed');
+    }
+    if (typeof ack === 'function') ack(result);
+  });
+
   socket.on('account-update-profile', (data, ack) => {
     const me = requireVerifiedAccount();
     if (!me) {

@@ -108,7 +108,10 @@ const required = [
   ['people-list', 'registered users list'],
   ['admin-tab-btn', 'owner admin tab'],
   ['start-members-grid', 'public registered members section'],
-  ['acct-panel-profile', 'member profile editor'],
+  ['settings-modal', 'settings modal'],
+  ['settings-btn', 'settings button'],
+  ['member-profile-form', 'member profile form'],
+  ['delete-account-btn', 'delete account'],
   ['member-avatars-male', 'male member avatars'],
   ['member-avatars-female', 'female member avatars']
 ];

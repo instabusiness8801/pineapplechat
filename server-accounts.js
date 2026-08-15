@@ -737,6 +737,32 @@ function declineFriendRequest(sessionToken, fromEmail) {
   return { ok: true, message: 'Request updated.', account: publicAccount(acc) };
 }
 
+function deleteAccount(sessionToken, password) {
+  const acc = getAccountForSession(sessionToken);
+  if (!isActive(acc)) return { ok: false, message: 'Please log in first.' };
+  password = String(password || '');
+  if (!password) return { ok: false, message: 'Enter your password to delete the account.' };
+  const hash = hashPassword(password, acc.salt);
+  if (hash !== acc.passwordHash) return { ok: false, message: 'Incorrect password.' };
+  const email = acc.email;
+  for (const other of accounts.values()) {
+    if (!other || other.email === email) continue;
+    stripFrom(other.friends || [], email);
+    stripFrom(other.incomingRequests || [], email);
+    stripFrom(other.outgoingRequests || [], email);
+    stripFrom(other.blocked || [], email);
+  }
+  accounts.delete(email);
+  pendingSignups.delete(email);
+  revokeAuthTokensForEmail(email);
+  for (const [tok, em] of Array.from(sessionAccount.entries())) {
+    if (em === email) sessionAccount.delete(tok);
+  }
+  saveAccounts();
+  savePending();
+  return { ok: true, email, message: 'Account deleted.' };
+}
+
 function removeFriend(sessionToken, friendEmail) {
   const me = getEmailForSession(sessionToken);
   if (!me) return { ok: false, message: 'Please log in first.' };
@@ -939,6 +965,7 @@ module.exports = {
   acceptFriendRequest,
   declineFriendRequest,
   removeFriend,
+  deleteAccount,
   listFriends,
   listFriendsWithPresence,
   listFriendRequests,
