@@ -721,8 +721,31 @@
       margin: 0;
     }
     .seo-block {
-      margin-top: 1.25rem;
-      padding: 1.1rem 1.15rem 1.2rem;
+      margin-top: 0.85rem;
+      padding: 0.85rem 1rem 0.95rem;
+    }
+    .start-form-col .seo-block:first-of-type { margin-top: 1rem; }
+    #hub-chat-help {
+      flex-shrink: 0;
+      border-top: 1px solid var(--border);
+      max-height: 38%;
+      overflow: auto;
+    }
+    #hub-chat-help > summary {
+      list-style: none;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.45rem 0.75rem;
+      color: var(--text-strong);
+    }
+    #hub-chat-help > summary::-webkit-details-marker { display: none; }
+    #hub-chat-help .seo-block {
+      margin: 0;
+      padding: 0.35rem 0.75rem 0.7rem;
+      box-shadow: none;
+      border: 0;
+      background: transparent;
     }
     .seo-block h2 {
       font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
@@ -1588,9 +1611,6 @@
             <p class="text-center text-[10px] theme-muted">Be respectful. Report or block unsafe behaviour. 18+ only.</p>
           </form>
         </div>
-        </div>
-      </div>
-      </div>
 
       <section id="how-it-works" class="seo-block surface-card">
         <h2>How random chat works</h2>
@@ -1609,7 +1629,7 @@
 
       <section id="faq" class="seo-block surface-card seo-faq">
         <h2>Chat FAQ</h2>
-        <details open>
+        <details>
           <summary>What is PineappleChat?</summary>
           <p>PineappleChat is a browser-based random chat and friend chat site. You talk one-to-one with people who are online — not a public room full of overlapping voices.</p>
         </details>
@@ -1631,6 +1651,8 @@
         <p><strong>PineappleChat</strong> · <a href="/about">About</a> · <a href="/chat-websites">Chat websites</a> · <a href="/random-chat">Random chat</a> · <a href="/friend-chat">Friend chat</a> · 18+ only</p>
         <p class="mt-1">Free online chat to meet new people or keep friends. Be respectful. Use Leave or Block if a conversation feels unsafe.</p>
       </footer>
+        </div>
+      </div>
 
     </div>
 
@@ -1784,6 +1806,37 @@
               <div id="read-receipt-status" class="text-[10px] mt-0.5 px-1 theme-muted"></div>
             </div>
           </div>
+          <details id="hub-chat-help">
+            <summary>How chat works</summary>
+            <section class="seo-block seo-faq">
+              <h2 class="text-xs font-semibold mb-1">How random chat works</h2>
+              <ol class="text-[11px] pl-4 mb-2">
+                <li>Choose a username, age (18+), and city.</li>
+                <li>See who is online in the People list.</li>
+                <li>Tap someone to start a one-to-one random chat.</li>
+                <li>Leave, mute, block, or report at any time.</li>
+              </ol>
+              <h2 class="text-xs font-semibold mb-1">Friend chat and inbox</h2>
+              <p class="text-[11px] mb-2">Create a free account to keep friend chat: add friends when both of you are registered, see last seen, and send inbox messages that wait if they are offline. Hidden mode hides you until you message someone.</p>
+              <h2 class="text-xs font-semibold mb-1">Chat FAQ</h2>
+              <details>
+                <summary>What is PineappleChat?</summary>
+                <p>PineappleChat is a browser-based random chat and friend chat site. You talk one-to-one with people who are online — not a public room.</p>
+              </details>
+              <details>
+                <summary>Can I start a random chat without registering?</summary>
+                <p>Yes. Fill the short profile and tap someone in People. Register only if you want friend chat and inbox.</p>
+              </details>
+              <details>
+                <summary>How is friend chat different from random chat?</summary>
+                <p>Random chat is live and works for guests. Friend chat needs two registered members.</p>
+              </details>
+              <details>
+                <summary>Is PineappleChat 18+ and anonymous?</summary>
+                <p>Yes — 18+ only. You chat under a username, not your real name.</p>
+              </details>
+            </section>
+          </details>
         </div>
       </div>
     </div>
