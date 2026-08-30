@@ -75,7 +75,20 @@ if (ageHasMin) {
   process.exit(1);
 }
 
-const pubFiles = ['robots.txt', 'sitemap.xml', 'og-image.jpg', 'favicon.svg', 'site.webmanifest', 'apple-touch-icon.png'];
+const pubFiles = [
+  'robots.txt',
+  'sitemap.xml',
+  'og-image.jpg',
+  'favicon.svg',
+  'site.webmanifest',
+  'apple-touch-icon.png',
+  'llms.txt',
+  'llms-full.txt',
+  'about.html',
+  'chat-websites.html',
+  'random-chat.html',
+  'friend-chat.html'
+];
 for (const f of pubFiles) {
   const p = path.join(__dirname, '..', 'public', f);
   if (!fs.existsSync(p)) {
@@ -84,6 +97,18 @@ for (const f of pubFiles) {
   }
 }
 console.log('SEO FILES OK');
+
+const robotsTxt = fs.readFileSync(path.join(__dirname, '..', 'public', 'robots.txt'), 'utf8');
+if (!robotsTxt.includes('GPTBot') || !robotsTxt.includes('GrokBot') || !robotsTxt.includes('OAI-SearchBot')) {
+  console.error('robots.txt should explicitly allow GPTBot, GrokBot, OAI-SearchBot');
+  process.exit(1);
+}
+const llms = fs.readFileSync(path.join(__dirname, '..', 'public', 'llms.txt'), 'utf8');
+if (!llms.includes('https://pineapplechat.com') || !llms.toLowerCase().includes('random chat')) {
+  console.error('llms.txt missing cite-ready PineappleChat facts');
+  process.exit(1);
+}
+console.log('AI CRAWLER FILES OK');
 
 const required = [
   ['world-locations.js', 'country list script'],
@@ -135,7 +160,8 @@ const required = [
   ['application/ld+json', 'JSON-LD structured data'],
   ['og:image', 'Open Graph image'],
   ['How random chat works', 'SEO how-it-works copy'],
-  ['Friend chat and inbox', 'SEO friend-chat copy']
+  ['Friend chat and inbox', 'SEO friend-chat copy'],
+  ['/chat-websites', 'chat websites info page link']
 ];
 const maleAvatars = (html.match(/gender: 'male'/g) || []).length;
 const femaleAvatars = (html.match(/gender: 'female'/g) || []).length;

@@ -38,6 +38,23 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+function sendPublicHtml(name) {
+  return (req, res) => {
+    res.setHeader('Cache-Control', 'public, max-age=600');
+    res.sendFile(path.join(__dirname, 'public', name));
+  };
+}
+const infoPages = {
+  '/about': 'about.html',
+  '/random-chat': 'random-chat.html',
+  '/friend-chat': 'friend-chat.html',
+  '/chat-websites': 'chat-websites.html'
+};
+Object.keys(infoPages).forEach((route) => {
+  app.get(route, sendPublicHtml(infoPages[route]));
+  app.get(route + '.html', (req, res) => res.redirect(301, route));
+});
+
 const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
 /** Keep user on the online list as away & allow seamless rejoin for this long after disconnect */
 const SESSION_GRACE_MS = 10 * 60 * 1000;
