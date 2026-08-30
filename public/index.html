@@ -826,6 +826,21 @@
       background: #2A3D30;
       color: #cfe8d2;
     }
+    .people-bot-badge {
+      font-size: 9px;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: var(--chip-yellow, #FFF8E1);
+      color: #6B5500;
+      font-weight: 600;
+      flex-shrink: 0;
+      border: 1px solid color-mix(in srgb, var(--pine-gold) 40%, transparent);
+    }
+    html[data-theme="dark"] .people-bot-badge {
+      background: #4A3F28;
+      color: #F5D76E;
+    }
     .people-avatar-wrap {
       position: relative;
       flex-shrink: 0;
@@ -2800,6 +2815,7 @@
         if (src.memberId) dest.memberId = dest.memberId || src.memberId;
         if (src.partnerEmail) dest.partnerEmail = dest.partnerEmail || src.partnerEmail;
         if (src.hidden) dest.hidden = true;
+        if (src.isBot) dest.isBot = true;
       }
       delete chats[fromId];
       if (activeChatId === fromId) activeChatId = toId;
@@ -3084,7 +3100,10 @@
           remapChatsFromOnlineList(real);
           real.forEach((u) => {
             const cid = chatIdForUser(u);
-            if (cid && chats[cid]) chats[cid].hidden = !!u.hidden;
+            if (cid && chats[cid]) {
+              chats[cid].hidden = !!u.hidden;
+              if (u.isBot) chats[cid].isBot = true;
+            }
           });
           saveSession();
         }
@@ -3109,6 +3128,9 @@
         }
 
         ensureChat(pid, prof, pToken);
+        if (data.isBot || isBotUser({ id: pid, isBot: data.isBot, sessionToken: pToken })) {
+          chats[pid].isBot = true;
+        }
         if (data.registered) {
           chats[pid].registered = true;
           chats[pid].memberId = data.memberId || chats[pid].memberId;
@@ -3705,6 +3727,20 @@
       return !!(user && (user.registered || user.memberId || isMemberChatId(user.id)));
     }
 
+    function isBotUser(user) {
+      if (!user) return false;
+      if (user.isBot) return true;
+      const id = String(user.id || user.partnerId || '');
+      if (id.indexOf('bot:') === 0) return true;
+      if (user.sessionToken && String(user.sessionToken).indexOf('bot:') === 0) return true;
+      if (user.partnerSessionToken && String(user.partnerSessionToken).indexOf('bot:') === 0) return true;
+      return false;
+    }
+
+    function botBadgeHtml(on) {
+      return on ? '<span class="people-bot-badge">Bot</span>' : '';
+    }
+
     function isSelfUser(user) {
       if (!user) return true;
       if (socket && (user.id === socket.id || user.socketId === socket.id)) return true;
@@ -3856,6 +3892,7 @@
       ensureChat(pid, user.profile, user.sessionToken);
       if (chats[pid]) {
         chats[pid].unread = 0;
+        if (isBotUser(user)) chats[pid].isBot = true;
         if (isMemberUser(user)) {
           chats[pid].registered = true;
           chats[pid].memberId = user.memberId || chats[pid].memberId;
@@ -5906,6 +5943,9 @@
         chats[pid].registered = true;
         chats[pid].memberId = chats[pid].memberId || memberIdFromChatId(pid);
       }
+      if (String(pid).indexOf('bot:') === 0 || (profile && profile.username === 'PineappleChat Bot')) {
+        chats[pid].isBot = true;
+      }
     }
 
     // === MULTI CHAT FUNCTIONS ===
@@ -5920,7 +5960,9 @@
       // Merge online list with any local chats that have unread/history but id not yet remapped
       const byId = new Map();
       function samePersonInMap(user, chat) {
+        if (isBotUser(user) || (chat && chat.isBot)) return null;
         for (const existing of byId.values()) {
+          if (existing && existing.isBot) continue;
           if (user && existing.memberId && user.memberId && existing.memberId === user.memberId) return existing;
           if (chat && existing.memberId && chat.memberId && existing.memberId === chat.memberId) return existing;
           if (user && existing.sessionToken && user.sessionToken && existing.sessionToken === user.sessionToken) return existing;
@@ -5982,6 +6024,7 @@
             online: false,
             registered: !!c.registered,
             hidden: !!c.hidden,
+            isBot: !!c.isBot,
             memberId: c.memberId || memberIdFromChatId(cid),
             email: c.partnerEmail || null
           });
@@ -5996,6 +6039,7 @@
         const cid = chatIdForUser(user);
         if (currentSocketId && (user.id === currentSocketId || cid === currentSocketId)) return false;
         if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
+        if (isBotUser(user) || (chats[cid] && chats[cid].isBot)) return true;
         // Hide blocked users
         if (blockedIds.has(user.id) || blockedIds.has(cid) || (user.sessionToken && blockedIds.has(user.sessionToken))) return false;
         const p = user.profile;
@@ -6026,6 +6070,9 @@
       filtered.sort((a, b) => {
         const aid = chatIdForUser(a) || a.id;
         const bid = chatIdForUser(b) || b.id;
+        const abot = (isBotUser(a) || (chats[aid] && chats[aid].isBot)) ? 1 : 0;
+        const bbot = (isBotUser(b) || (chats[bid] && chats[bid].isBot)) ? 1 : 0;
+        if (abot !== bbot) return bbot - abot;
         const ta = (chats[aid] && chats[aid].lastMessageTs) || 0;
         const tb = (chats[bid] && chats[bid].lastMessageTs) || 0;
         const au = (chats[aid] && (chats[aid].unread || 0) > 0) ? 1 : 0;
@@ -6079,13 +6126,15 @@
         const ageGender = [safeAge, genderBit].filter(Boolean).join('');
         const presence = user.online ? 'online' : (user.away ? 'away' : (member ? 'offline' : ''));
         const isHiddenPerson = peopleHiddenFlag(user);
-        const metaBits = [ageGender, locWithFlag, presence].filter(Boolean);
+        const isBot = isBotUser(user) || !!(chatData && chatData.isBot);
+        const metaBits = isBot ? [presence].filter(Boolean) : [ageGender, locWithFlag, presence].filter(Boolean);
         row.innerHTML = `
           ${avatar}
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1">
               <div class="text-sm font-semibold truncate group-hover:brightness-110 transition" style="${nameStyle}">${safeName}</div>
-              ${member ? '<span class="people-member-badge">Member</span>' : ''}
+              ${isBot ? botBadgeHtml(true) : ''}
+              ${member && !isBot ? '<span class="people-member-badge">Member</span>' : ''}
               ${user.away ? '<span class="people-away-badge">Away</span>' : ''}
               ${hiddenBadgeHtml(isHiddenPerson)}
               ${hasUnread ? `<span class="ml-0.5 w-2 h-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse ring-1 ring-red-400"></span>` : ''}
@@ -6140,11 +6189,12 @@
         const genderBit = p.gender === 'female' ? 'F' : (p.gender === 'male' ? 'M' : '');
         const ageBit = p.age != null && p.age !== '' ? escapeHtml(String(p.age)) : '';
         const ageGender = [ageBit, genderBit].filter(Boolean).join('');
-        const metaBits = [ageGender, locWithFlag, presence].filter(Boolean);
+        const isBot = isBotUser(user);
+        const metaBits = isBot ? [presence].filter(Boolean) : [ageGender, locWithFlag, presence].filter(Boolean);
         div.innerHTML = `
           ${avatar}
           <div class="min-w-0 flex-1">
-            <div class="font-medium truncate flex items-center gap-1" style="${nameStyle}">${escapeHtml(p.username || user.displayName || 'Anonymous')}${member ? ' <span class="people-member-badge">Member</span>' : ''}${user.away ? ' <span class="people-away-badge">Away</span>' : ''}${hiddenBadgeHtml(peopleHiddenFlag(user))}</div>
+            <div class="font-medium truncate flex items-center gap-1" style="${nameStyle}">${escapeHtml(p.username || user.displayName || 'Anonymous')}${isBot ? ' ' + botBadgeHtml(true) : ''}${member && !isBot ? ' <span class="people-member-badge">Member</span>' : ''}${user.away ? ' <span class="people-away-badge">Away</span>' : ''}${hiddenBadgeHtml(peopleHiddenFlag(user))}</div>
             <div class="text-[9px] theme-muted truncate">${metaBits.join(' • ')}</div>
             ${p.whatsOnMind ? `<div class="text-[8px] theme-muted italic truncate">${escapeHtml(p.whatsOnMind)}</div>` : ''}
           </div>
@@ -6173,9 +6223,13 @@
 
       // Header with gender color (leaf / peach)
       const headerProf = chatData.partnerProfile;
+      const headerIsBot = !!chatData.isBot || isBotUser({ id: partnerId, isBot: chatData.isBot, sessionToken: chatData.partnerSessionToken, partnerSessionToken: chatData.partnerSessionToken });
       const headerNameStyle = headerProf.gender === 'male'
         ? 'color:var(--pine-leaf)'
         : (headerProf.gender === 'female' ? 'color:var(--pine-peach)' : '');
+      const headerSub = headerIsBot
+        ? 'Site bot · not a person'
+        : ([headerProf.age != null && headerProf.age !== '' ? escapeHtml(String(headerProf.age)) : '', escapeHtml(headerProf.location || '')].filter(Boolean).join(' • ') || (chatData.registered ? 'Registered member' : 'Guest'));
 
       activeChatHeader.innerHTML = `
         <div class="flex items-center gap-2 sm:gap-3 min-w-0 w-full">
@@ -6185,9 +6239,9 @@
               : `<div class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-user text-sm sm:text-lg theme-muted"></i></div>`}
           </div>
           <div class="min-w-0 flex-1">
-            <div class="font-semibold text-sm sm:text-base truncate flex items-center gap-1" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}${chatData.registered || isMemberChatId(partnerId) ? ' <span class="people-member-badge">Member</span>' : ''}${hiddenBadgeHtml(!!chatData.hidden || !!(allOnlineUsers.find((u) => chatIdForUser(u) === partnerId || u.id === partnerId) || {}).hidden)}</div>
-            <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${[headerProf.age != null && headerProf.age !== '' ? escapeHtml(String(headerProf.age)) : '', escapeHtml(headerProf.location || '')].filter(Boolean).join(' • ') || (chatData.registered ? 'Registered member' : 'Guest')}</div>
-            ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate hidden sm:block">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
+            <div class="font-semibold text-sm sm:text-base truncate flex items-center gap-1" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}${headerIsBot ? ' ' + botBadgeHtml(true) : ''}${!headerIsBot && (chatData.registered || isMemberChatId(partnerId)) ? ' <span class="people-member-badge">Member</span>' : ''}${hiddenBadgeHtml(!!chatData.hidden || !!(allOnlineUsers.find((u) => chatIdForUser(u) === partnerId || u.id === partnerId) || {}).hidden)}</div>
+            <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${headerSub}</div>
+            ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate ${headerIsBot ? '' : 'hidden sm:block'}">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
             ${headerProf.relationshipStatus && RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus]
               ? `<div class="text-[9px] theme-muted truncate">${escapeHtml(RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus])}</div>`
               : ''}

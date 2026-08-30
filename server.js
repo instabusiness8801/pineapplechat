@@ -59,6 +59,29 @@ const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
 /** Keep user on the online list as away & allow seamless rejoin for this long after disconnect */
 const SESSION_GRACE_MS = 10 * 60 * 1000;
 
+const SITE_BOT_ID = 'bot:pineapplechat';
+const SITE_BOT_PROFILE = {
+  username: 'PineappleChat Bot',
+  gender: '',
+  age: '',
+  country: '',
+  city: '',
+  location: '',
+  image: '/icon-192.png',
+  whatsOnMind: "I'm the site bot — not a person. Chat with me until someone real joins."
+};
+const SITE_BOT_GREETING =
+  "Hey — I'm PineappleChat Bot, not a person. Nobody else is in the list right now. Chat with me until someone real shows up, then tap them. 18+ only.";
+const SITE_BOT_HUMAN_JOINED =
+  "A real person just came online. Check People and tap them — I'm still here if you want.";
+const SITE_BOT_REPLIES = [
+  "Still just the site bot here — not a person. Hang tight and tap someone in People when they show up.",
+  "I'm PineappleChat Bot. I keep you company when the list is quiet. A real person can jump in any time.",
+  "Yep, still me, the bot. Check the People list — if someone real is there, tap them to chat.",
+  "Happy to chat, but I'm not human. Wait for a real visitor and tap their name in People.",
+  "Got it. I'm the site bot, 18+ only, SFW. When someone real joins I'll let you know."
+];
+
 app.get('/api/config', (req, res) => {
   res.json({
     enableDemoUsers: ENABLE_DEMO_USERS,
@@ -129,6 +152,10 @@ const pairs = new Map(); // socketId -> partnerSocketId
 const blockedUsers = new Map();
 /** sessionToken -> Set of blocked sessionTokens (survives reconnect) */
 const blockedBySession = new Map();
+/** socket ids currently chatting with the site bot */
+const siteBotChats = new Set();
+let siteBotReplyCursor = 0;
+let lastLiveHumanCount = 0;
 
 function newSessionToken() {
   return crypto.randomBytes(16).toString('hex');
@@ -181,6 +208,120 @@ function isBlockedBetween(idOrTokenA, idOrTokenB, tokenA, tokenB) {
     if (sb && sb.has(idOrTokenA)) return true;
   }
   return false;
+}
+
+function isSiteBotTarget(id) {
+  const s = String(id || '');
+  return s === SITE_BOT_ID || s.toLowerCase().startsWith('bot:');
+}
+
+function siteBotListEntry() {
+  return {
+    id: SITE_BOT_ID,
+    socketId: SITE_BOT_ID,
+    sessionToken: SITE_BOT_ID,
+    profile: SITE_BOT_PROFILE,
+    online: true,
+    away: false,
+    isBot: true,
+    registered: false,
+    hidden: false
+  };
+}
+
+function botSenderProfile() {
+  return {
+    username: SITE_BOT_PROFILE.username,
+    age: SITE_BOT_PROFILE.age,
+    gender: SITE_BOT_PROFILE.gender,
+    country: SITE_BOT_PROFILE.country,
+    city: SITE_BOT_PROFILE.city,
+    location: SITE_BOT_PROFILE.location,
+    image: SITE_BOT_PROFILE.image,
+    whatsOnMind: SITE_BOT_PROFILE.whatsOnMind
+  };
+}
+
+function botMessagePayload(text) {
+  return {
+    msgId: crypto.randomBytes(8).toString('hex'),
+    text: String(text || ''),
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    senderId: SITE_BOT_ID,
+    senderSessionToken: SITE_BOT_ID,
+    senderMemberId: null,
+    senderHidden: false,
+    replyTo: null,
+    from: SITE_BOT_ID,
+    fromSelf: false,
+    senderProfile: botSenderProfile()
+  };
+}
+
+function emitBotMessageSoon(socket, text, delayMs) {
+  if (!socket) return;
+  const wait = delayMs != null ? delayMs : (400 + Math.floor(Math.random() * 501));
+  const payload = botMessagePayload(text);
+  setTimeout(() => {
+    if (!socket.connected) return;
+    socket.emit('receive-message', payload);
+  }, wait);
+}
+
+function nextSiteBotReply() {
+  const text = SITE_BOT_REPLIES[siteBotReplyCursor % SITE_BOT_REPLIES.length];
+  siteBotReplyCursor += 1;
+  return text;
+}
+
+function pickSiteBotReply(userText) {
+  const t = String(userText || '').toLowerCase();
+  if (
+    /\b(are you (a )?(real )?(human|person)|you real|r u real|are you a bot|you a bot|are you ai|human or bot|bot or human)\b/.test(t)
+  ) {
+    return "I'm PineappleChat Bot — the site bot, not a person. Tap a real name in People when someone joins.";
+  }
+  if (
+    /\b(sex|sexy|nude|nudes|horny|porn|nsfw|dick|pussy|fuck me|send nudes|onlyfans)\b/.test(t) ||
+    /\b(minor|underage|child|kid)\b/.test(t)
+  ) {
+    return "No. I'm a SFW site bot, 18+ only. I won't talk about sexual content or anything involving minors. Chat about something else, or wait for a real person.";
+  }
+  if (/^\s*(hi+|hey+|hello|yo|sup|hiya|howdy|good (morning|afternoon|evening))\b/.test(t)) {
+    return "Hey! I'm PineappleChat Bot, not a person. Chat with me until someone real shows up, then tap them in People.";
+  }
+  return nextSiteBotReply();
+}
+
+function countOnlineHumans() {
+  let n = 0;
+  for (const sess of sessions.values()) {
+    if (!sess || !sess.profile) continue;
+    const live = sess.socketId && getLiveSocket(sess.socketId);
+    if (live && !sess.browseHidden) n += 1;
+  }
+  return n;
+}
+
+function notifySiteBotChatsHumanJoined(exceptSocketId) {
+  for (const sid of [...siteBotChats]) {
+    if (exceptSocketId && sid === exceptSocketId) continue;
+    const s = getLiveSocket(sid);
+    if (!s) {
+      siteBotChats.delete(sid);
+      continue;
+    }
+    s.emit('receive-message', botMessagePayload(SITE_BOT_HUMAN_JOINED));
+  }
+}
+
+function maybeAnnounceHumanJoined(exceptSocketId, prevOverride) {
+  const n = countOnlineHumans();
+  const prev = prevOverride != null ? prevOverride : lastLiveHumanCount;
+  lastLiveHumanCount = n;
+  if (prev < 2 && n >= 2) {
+    notifySiteBotChatsHumanJoined(exceptSocketId);
+  }
 }
 
 function getLiveSocket(socketId) {
@@ -639,14 +780,29 @@ function buildOnlineListForViewer(viewerSocketId, viewerToken) {
     if (entry) out.push(entry);
   }
 
+  const viewerIsBot =
+    viewerSocketId === SITE_BOT_ID ||
+    viewerToken === SITE_BOT_ID;
+  if (!viewerIsBot && !out.some((u) => u && (u.isBot || u.id === SITE_BOT_ID))) {
+    out.push(siteBotListEntry());
+  }
+
   out.sort((a, b) => {
-    const ao = a.online ? 2 : (a.away ? 1 : 0);
-    const bo = b.online ? 2 : (b.away ? 1 : 0);
+    const abot = a && a.isBot ? 1 : 0;
+    const bbot = b && b.isBot ? 1 : 0;
+    const ao = (a && a.online ? 2 : (a && a.away ? 1 : 0)) + (abot ? 0.5 : 0);
+    const bo = (b && b.online ? 2 : (b && b.away ? 1 : 0)) + (bbot ? 0.5 : 0);
     if (ao !== bo) return bo - ao;
+    if (abot !== bbot) return bbot - abot;
     const an = (a.profile && a.profile.username) || '';
     const bn = (b.profile && b.profile.username) || '';
     return String(an).localeCompare(String(bn));
   });
+  const botIdx = out.findIndex((u) => u && u.isBot);
+  if (botIdx > 0) {
+    const [bot] = out.splice(botIdx, 1);
+    out.unshift(bot);
+  }
   return out;
 }
 
@@ -661,7 +817,8 @@ function broadcastOnlineUsers() {
 
 function broadcastStats() {
   const list = buildOnlineListForViewer(null, null);
-  const online = list.filter((u) => u && u.online).length;
+  const online = list.filter((u) => u && u.online && !u.isBot).length;
+  lastLiveHumanCount = online;
   let chattingPairs = 0;
   const seen = new Set();
   for (const [a, b] of pairs.entries()) {
@@ -857,6 +1014,13 @@ io.on('connection', (socket) => {
     }
 
     const newUsername = (cleanedProfile.username || '').trim().toLowerCase();
+    if (newUsername && newUsername === String(SITE_BOT_PROFILE.username).trim().toLowerCase()) {
+      socket.emit('profile-error', {
+        field: 'username',
+        message: 'This username is reserved for the site bot.'
+      });
+      return;
+    }
 
     // Resume existing session within grace window (by token, else by username if away)
     let token = typeof cleanedProfile.sessionToken === 'string' ? cleanedProfile.sessionToken.trim() : '';
@@ -971,14 +1135,32 @@ io.on('connection', (socket) => {
     // Deliver queued messages after client finishes profile-accepted / hub restore
     flushPendingSoon(sess);
 
+    const prevHumans = lastLiveHumanCount;
     broadcastOnlineUsers();
     broadcastStats();
+    maybeAnnounceHumanJoined(socket.id, prevHumans);
     console.log(`[profile] ${cleanedProfile.username} socket=${socket.id} token=${token.slice(0, 8)}…`);
   });
 
   socket.on('start-chat-with', (data) => {
     const targetId = data && data.targetId;
     if (!targetId || targetId === socket.id) return;
+
+    if (isSiteBotTarget(targetId)) {
+      if (!socket.sessionToken || !getSessionByToken(socket.sessionToken)) {
+        socket.emit('chat-error', { message: 'Please complete your profile first.' });
+        return;
+      }
+      socket.emit('chat-started', {
+        partnerId: SITE_BOT_ID,
+        partnerProfile: SITE_BOT_PROFILE,
+        isBot: true,
+        partnerSessionToken: SITE_BOT_ID
+      });
+      siteBotChats.add(socket.id);
+      emitBotMessageSoon(socket, SITE_BOT_GREETING, 500);
+      return;
+    }
 
     const memberEmail = resolveMemberEmail(targetId);
     const memberAcc = memberEmail ? accounts.getAccountByEmail(memberEmail) : null;
@@ -1157,6 +1339,23 @@ io.on('connection', (socket) => {
     const rl = features.rateLimit('msg:' + socket.id, 40, 60 * 1000);
     if (!rl.ok) {
       socket.emit('chat-error', { message: rl.message });
+      return;
+    }
+
+    if (isSiteBotTarget(targetId)) {
+      const check = safety.validateChatText(text);
+      if (!check.ok) {
+        socket.emit('chat-error', { message: check.message || 'Message blocked by safety filters.' });
+        return;
+      }
+      const clientMsgId = data.msgId != null ? String(data.msgId) : '';
+      const msgId =
+        clientMsgId && /^[a-zA-Z0-9_-]{8,40}$/.test(clientMsgId)
+          ? clientMsgId
+          : crypto.randomBytes(8).toString('hex');
+      features.registerMessageOwner(msgId, socket.sessionToken || socket.id);
+      siteBotChats.add(socket.id);
+      emitBotMessageSoon(socket, pickSiteBotReply(check.text));
       return;
     }
 
@@ -1386,6 +1585,15 @@ io.on('connection', (socket) => {
   socket.on('block-user', (data) => {
     const targetId = data && data.targetId;
     if (!targetId) return;
+
+    if (isSiteBotTarget(targetId)) {
+      socket.emit('block-ok', {
+        targetId: SITE_BOT_ID,
+        targetSessionToken: SITE_BOT_ID,
+        message: 'The site bot stays in People — it is not a person you can block.'
+      });
+      return;
+    }
 
     const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
     const myToken = socket.sessionToken || socketToSession.get(socket.id);
@@ -2201,6 +2409,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} (${reason})`);
+    siteBotChats.delete(socket.id);
 
     // Intentional log off already removed the session — do not start grace
     if (socket.intentionalLogout) {
