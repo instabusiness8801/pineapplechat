@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Random Chat &amp; Friend Chat Online | PineappleChat</title>
   <meta name="description" content="Free random chat and friend chat for adults 18+. Talk to strangers online, meet new people, or keep a friend inbox. Start chatting on PineappleChat.">
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
@@ -971,15 +971,15 @@
       flex-direction: column;
       gap: 0.75rem;
       min-height: 0;
-      height: calc(100dvh - 9.5rem);
-      max-height: calc(100dvh - 9.5rem);
+      height: calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px));
+      max-height: calc(100dvh - 9.5rem - env(safe-area-inset-bottom, 0px));
     }
     @media (min-width: 768px) {
       #chat-hub .hub-main {
         flex-direction: row;
         gap: 1rem;
-        height: calc(100dvh - 10.5rem);
-        max-height: calc(100dvh - 10.5rem);
+        height: calc(100dvh - 10.5rem - env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - 10.5rem - env(safe-area-inset-bottom, 0px));
       }
     }
     #hub-users-pane {
@@ -1063,7 +1063,8 @@
       width: 100%;
       max-width: 80rem;
       margin: 0 auto;
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem max(0.75rem, env(safe-area-inset-right));
+      padding-left: max(0.75rem, env(safe-area-inset-left));
       min-height: 3.5rem;
     }
     .nav-brand {
@@ -1785,7 +1786,7 @@
               <button type="button" id="reply-preview-cancel" class="text-xs theme-muted hover:text-red-500 px-2" title="Cancel reply">✕</button>
             </div>
 
-            <div class="p-2 sm:p-3 theme-surface border-t theme-border chat-composer">
+            <div class="p-2 sm:p-3 theme-surface border-t theme-border chat-composer" style="padding-bottom:max(0.5rem, env(safe-area-inset-bottom, 0px))">
               <form id="multi-chat-form" class="flex gap-1.5 sm:gap-2 items-center">
                 <button type="button" id="attach-btn" title="Attach image or video" class="px-2.5 sm:px-3 py-2 theme-muted hover:text-gray-800 hover:bg-gray-100 rounded-xl min-h-[44px] min-w-[44px]">
                   <i class="fa-solid fa-paperclip"></i>
