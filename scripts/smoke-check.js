@@ -119,7 +119,8 @@ const required = [
   ['auth-panel-reset', 'password reset panel'],
   ['signed-in-chat-card', 'signed-in skip start form'],
   ['hidden-mode-btn', 'hidden mode toggle'],
-  ['you-bar', 'own username bar']
+  ['you-bar', 'own username bar'],
+  ['people-hidden-badge', 'hidden badge on people list']
 ];
 const maleAvatars = (html.match(/gender: 'male'/g) || []).length;
 const femaleAvatars = (html.match(/gender: 'female'/g) || []).length;

@@ -711,6 +711,20 @@
       background: #4A3F28;
       color: #F5D76E;
     }
+    .people-hidden-badge {
+      font-size: 9px;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: #3f3a32;
+      color: #fff;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    html[data-theme="dark"] .people-hidden-badge {
+      background: #2a2722;
+      color: #f3efe6;
+    }
     .people-row-away {
       opacity: 0.78;
     }
@@ -2288,6 +2302,19 @@
     function resolveIncomingChatId(data) {
       if (!data) return null;
       if (data.fromSelf) return activeChatId;
+      const memberPid = data.senderMemberId ? ('member:' + data.senderMemberId) : '';
+      if (memberPid) {
+        if (data.senderSessionToken) {
+          const byTok = Object.keys(chats).find(
+            id => id !== memberPid && chats[id] && chats[id].partnerSessionToken === data.senderSessionToken
+          );
+          if (byTok) adoptChatId(byTok, memberPid);
+        }
+        if (data.senderId && data.senderId !== memberPid && chats[data.senderId]) {
+          adoptChatId(data.senderId, memberPid);
+        }
+        return memberPid;
+      }
       // Prefer stable session token match
       if (data.senderSessionToken) {
         const byTok = Object.keys(chats).find(
@@ -2344,6 +2371,11 @@
       if (data.senderSessionToken) {
         chats[targetChatId].partnerSessionToken = data.senderSessionToken;
       }
+      if (data.senderMemberId) {
+        chats[targetChatId].registered = true;
+        chats[targetChatId].memberId = data.senderMemberId;
+      }
+      if (data.senderHidden) chats[targetChatId].hidden = true;
 
       chats[targetChatId].messages.push({
         text: data.text,
@@ -2387,6 +2419,11 @@
         };
       }
       if (data.senderSessionToken) chats[targetChatId].partnerSessionToken = data.senderSessionToken;
+      if (data.senderMemberId) {
+        chats[targetChatId].registered = true;
+        chats[targetChatId].memberId = data.senderMemberId;
+      }
+      if (data.senderHidden) chats[targetChatId].hidden = true;
 
       const partnerTokA = chats[targetChatId].partnerSessionToken;
       const isMutedAtt = mutedIds.has(targetChatId) || (partnerTokA && mutedIds.has(partnerTokA));
@@ -2484,6 +2521,37 @@
       }
     }
 
+    function adoptChatId(fromId, toId) {
+      if (!fromId || !toId || fromId === toId) return toId;
+      const src = chats[fromId];
+      if (!src) return toId;
+      if (!chats[toId]) {
+        chats[toId] = src;
+      } else {
+        const dest = chats[toId];
+        dest.messages = dest.messages || [];
+        const seen = new Set(dest.messages.map((m) => m && m.msgId).filter(Boolean));
+        (src.messages || []).forEach((m) => {
+          if (m && m.msgId && seen.has(m.msgId)) return;
+          dest.messages.push(m);
+          if (m && m.msgId) seen.add(m.msgId);
+        });
+        dest.unread = Math.max(dest.unread || 0, src.unread || 0);
+        if ((src.lastMessageTs || 0) > (dest.lastMessageTs || 0)) dest.lastMessageTs = src.lastMessageTs;
+        if (src.partnerProfile) {
+          dest.partnerProfile = Object.assign({}, dest.partnerProfile || {}, src.partnerProfile);
+        }
+        if (src.partnerSessionToken) dest.partnerSessionToken = dest.partnerSessionToken || src.partnerSessionToken;
+        if (src.registered) dest.registered = true;
+        if (src.memberId) dest.memberId = dest.memberId || src.memberId;
+        if (src.partnerEmail) dest.partnerEmail = dest.partnerEmail || src.partnerEmail;
+        if (src.hidden) dest.hidden = true;
+      }
+      delete chats[fromId];
+      if (activeChatId === fromId) activeChatId = toId;
+      return toId;
+    }
+
     function remapChatsFromOnlineList(users) {
       // When partners reconnect they get new socket ids — rematch by sessionToken or username
       const list = users || allOnlineUsers || [];
@@ -2498,36 +2566,58 @@
       });
 
       const next = {};
+      function mergeInto(newId, incoming, match) {
+        if (!next[newId]) {
+          next[newId] = incoming;
+        } else if (next[newId] !== incoming) {
+          const dest = next[newId];
+          dest.messages = dest.messages || [];
+          const seen = new Set(dest.messages.map((m) => m && m.msgId).filter(Boolean));
+          (incoming.messages || []).forEach((m) => {
+            if (m && m.msgId && seen.has(m.msgId)) return;
+            dest.messages.push(m);
+            if (m && m.msgId) seen.add(m.msgId);
+          });
+          dest.unread = Math.max(dest.unread || 0, incoming.unread || 0);
+          if ((incoming.lastMessageTs || 0) > (dest.lastMessageTs || 0)) dest.lastMessageTs = incoming.lastMessageTs;
+          if (incoming.partnerProfile) {
+            dest.partnerProfile = Object.assign({}, dest.partnerProfile || {}, incoming.partnerProfile);
+          }
+          if (incoming.partnerSessionToken) dest.partnerSessionToken = dest.partnerSessionToken || incoming.partnerSessionToken;
+          if (incoming.registered) dest.registered = true;
+          if (incoming.memberId) dest.memberId = dest.memberId || incoming.memberId;
+          if (incoming.partnerEmail) dest.partnerEmail = dest.partnerEmail || incoming.partnerEmail;
+          if (incoming.hidden) dest.hidden = true;
+        }
+        if (match) {
+          next[newId].partnerProfile = match.profile || next[newId].partnerProfile;
+          next[newId].partnerSessionToken = match.sessionToken || next[newId].partnerSessionToken;
+          if (match.hidden) next[newId].hidden = true;
+          else if (typeof match.hidden === 'boolean') next[newId].hidden = match.hidden;
+          if (match.registered || match.memberId) {
+            next[newId].registered = true;
+            next[newId].memberId = match.memberId || next[newId].memberId;
+            if (match.email) next[newId].partnerEmail = match.email;
+          }
+        }
+      }
+
       Object.keys(chats).forEach(oldId => {
         const c = chats[oldId];
         let match = null;
         let newId = oldId;
-        if (isMemberChatId(oldId) || (c && c.registered)) {
+        if (isMemberChatId(oldId) || (c && c.registered) || (c && c.memberId)) {
           const mid = (c && c.memberId) || memberIdFromChatId(oldId);
           match = (mid && byMember.get(mid)) || (c && c.partnerEmail && byMember.get(String(c.partnerEmail).toLowerCase()));
           newId = mid ? ('member:' + mid) : oldId;
         } else if (c.partnerSessionToken && byToken.has(c.partnerSessionToken)) {
           match = byToken.get(c.partnerSessionToken);
-          newId = match && match.registered && match.memberId ? ('member:' + match.memberId) : match.id;
+          newId = match && match.memberId ? ('member:' + match.memberId) : (match.id || oldId);
         } else if (c.partnerProfile && c.partnerProfile.username) {
           match = byName.get(String(c.partnerProfile.username).toLowerCase());
-          newId = match ? (match.registered && match.memberId ? ('member:' + match.memberId) : match.id) : oldId;
+          newId = match ? (match.memberId ? ('member:' + match.memberId) : match.id) : oldId;
         }
-        if (next[newId] && newId !== oldId) {
-          // merge messages
-          next[newId].messages = (next[newId].messages || []).concat(c.messages || []);
-        } else {
-          next[newId] = c;
-          if (match) {
-            next[newId].partnerProfile = match.profile || c.partnerProfile;
-            next[newId].partnerSessionToken = match.sessionToken || c.partnerSessionToken;
-            if (match.registered) {
-              next[newId].registered = true;
-              next[newId].memberId = match.memberId || next[newId].memberId;
-              if (match.email) next[newId].partnerEmail = match.email;
-            }
-          }
-        }
+        mergeInto(newId, c, match);
         if (activeChatId === oldId) activeChatId = newId;
       });
       chats = next;
@@ -2738,6 +2828,10 @@
         // Partners may have new socket ids after refresh — rematch chats
         if (!intentionalLogout) {
           remapChatsFromOnlineList(real);
+          real.forEach((u) => {
+            const cid = chatIdForUser(u);
+            if (cid && chats[cid]) chats[cid].hidden = !!u.hidden;
+          });
           saveSession();
         }
         if (currentState === 'hub' || (chatHub && !chatHub.classList.contains('hidden'))) {
@@ -2749,10 +2843,16 @@
       socket.on('chat-started', (data) => {
         if (!data || !data.partnerId) return;
         
-        const useInboxId = !!(data.registered && data.memberId && myAccount && myAccount.verified);
-        const pid = useInboxId ? ('member:' + data.memberId) : data.partnerId;
+        const pid = (data.registered && data.memberId) ? ('member:' + data.memberId) : data.partnerId;
         const prof = data.partnerProfile || {};
         const pToken = data.partnerSessionToken || null;
+
+        if (data.partnerId && data.partnerId !== pid) adoptChatId(data.partnerId, pid);
+        if (pToken) {
+          Object.keys(chats).forEach((id) => {
+            if (id !== pid && chats[id] && chats[id].partnerSessionToken === pToken) adoptChatId(id, pid);
+          });
+        }
 
         ensureChat(pid, prof, pToken);
         if (data.registered) {
@@ -2760,6 +2860,7 @@
           chats[pid].memberId = data.memberId || chats[pid].memberId;
           if (data.email) chats[pid].partnerEmail = data.email;
         }
+        if (data.hidden) chats[pid].hidden = true;
 
         // Only add notification if not the one we are currently viewing.
         // Initiator switches locally on click. Receiver gets only notification.
@@ -2934,6 +3035,7 @@
           chats[chatId].registered = true;
           chats[chatId].memberId = memberId;
           chats[chatId].partnerEmail = payload.from || chats[chatId].partnerEmail;
+          if (payload.hidden) chats[chatId].hidden = true;
           const msg = payload.message || {};
           const at = msg.at || Date.now();
           const hubMsg = {
@@ -3340,11 +3442,9 @@
 
     function chatIdForUser(user) {
       if (!user) return '';
-      if (user.registered && (user.memberId || user.email)) {
-        return 'member:' + (user.memberId || '');
-      }
-      if (user.memberId && isMemberChatId(user.id)) return user.id;
-      return user.id || '';
+      if (user.memberId) return 'member:' + user.memberId;
+      if (isMemberChatId(user.id)) return user.id;
+      return user.socketId || user.id || '';
     }
 
     function isMemberUser(user) {
@@ -3358,8 +3458,20 @@
       const myEmail = myAccount && myAccount.email ? String(myAccount.email).toLowerCase() : '';
       if (myEmail && user.email && String(user.email).toLowerCase() === myEmail) return true;
       const myPid = myAccount && (myAccount.publicId || myAccount.memberId);
-      if (myPid && (user.memberId === myPid || user.id === 'member:' + myPid)) return true;
+      if (myPid && (user.memberId === myPid || user.id === 'member:' + myPid || chatIdForUser(user) === 'member:' + myPid)) return true;
       return false;
+    }
+
+    function peopleHiddenFlag(user) {
+      if (!user) return false;
+      if (user.hidden) return true;
+      const cid = chatIdForUser(user) || user.id;
+      if (cid && chats[cid] && chats[cid].hidden) return true;
+      return false;
+    }
+
+    function hiddenBadgeHtml(on) {
+      return on ? '<span class="people-hidden-badge">Hidden</span>' : '';
     }
 
     function memberChatMeta(chatId) {
@@ -3485,8 +3597,8 @@
     }
 
     function startLivePeopleChat(user) {
-      const pid = (isMemberChatId(user.id) ? (user.sessionToken || user.id) : user.id);
-      if (!pid || (socket && pid === socket.id)) return;
+      const pid = chatIdForUser(user);
+      if (!pid || (socket && (pid === socket.id || user.socketId === socket.id))) return;
       ensureChat(pid, user.profile, user.sessionToken);
       if (chats[pid]) {
         chats[pid].unread = 0;
@@ -3497,12 +3609,19 @@
         } else {
           chats[pid].registered = false;
         }
+        if (user.hidden) chats[pid].hidden = true;
+        if (user.socketId && user.socketId !== pid && chats[user.socketId]) {
+          adoptChatId(user.socketId, pid);
+        }
+        if (user.id && user.id !== pid && chats[user.id]) {
+          adoptChatId(user.id, pid);
+        }
       }
       showScreen('hub');
       switchToChat(pid);
       if (socket) {
         socket.emit('start-chat-with', {
-          targetId: user.id || pid
+          targetId: user.memberId ? ('member:' + user.memberId) : (user.id || pid)
         });
       }
       renderSidebarUsers();
@@ -5546,29 +5665,73 @@
 
       // Merge online list with any local chats that have unread/history but id not yet remapped
       const byId = new Map();
+      function samePersonInMap(user, chat) {
+        for (const existing of byId.values()) {
+          if (user && existing.memberId && user.memberId && existing.memberId === user.memberId) return existing;
+          if (chat && existing.memberId && chat.memberId && existing.memberId === chat.memberId) return existing;
+          if (user && existing.sessionToken && user.sessionToken && existing.sessionToken === user.sessionToken) return existing;
+          if (chat && existing.sessionToken && chat.partnerSessionToken && existing.sessionToken === chat.partnerSessionToken) return existing;
+          if (user && existing.email && user.email && String(existing.email).toLowerCase() === String(user.email).toLowerCase()) return existing;
+          if (chat && existing.email && chat.partnerEmail && String(existing.email).toLowerCase() === String(chat.partnerEmail).toLowerCase()) return existing;
+          const existingName = existing.profile && existing.profile.username;
+          const userName = user && user.profile && user.profile.username;
+          const chatName = chat && chat.partnerProfile && chat.partnerProfile.username;
+          if (existing.registered && existingName && userName && String(existingName).toLowerCase() === String(userName).toLowerCase()) return existing;
+          if (existing.registered && existingName && chatName && String(existingName).toLowerCase() === String(chatName).toLowerCase()) return existing;
+        }
+        return null;
+      }
       allOnlineUsers.forEach(u => {
         if (!u) return;
         const cid = chatIdForUser(u) || u.id;
         if (!cid) return;
-        byId.set(cid, Object.assign({}, u, { id: u.id, listId: cid }));
+        const dup = samePersonInMap(u, null);
+        if (dup) {
+          if (u.hidden) dup.hidden = true;
+          if (u.online) dup.online = true;
+          if (u.profile && u.profile.image && !(dup.profile && dup.profile.image)) dup.profile = u.profile;
+          return;
+        }
+        byId.set(cid, Object.assign({}, u, { id: u.id, listId: cid, hidden: !!u.hidden }));
       });
       Object.keys(chats).forEach(cid => {
         if (!cid || cid === currentSocketId) return;
-        if (byId.has(cid)) return;
         const c = chats[cid];
         if (!c || !c.partnerProfile) return;
+        const stableId = c.memberId ? ('member:' + c.memberId) : cid;
+        if (byId.has(cid) || byId.has(stableId)) {
+          const row = byId.get(stableId) || byId.get(cid);
+          if (row && c.hidden) row.hidden = true;
+          if (cid !== stableId) adoptChatId(cid, stableId);
+          return;
+        }
+        const dup = samePersonInMap({
+          memberId: c.memberId,
+          sessionToken: c.partnerSessionToken,
+          email: c.partnerEmail,
+          profile: c.partnerProfile,
+          registered: c.registered
+        }, c);
+        if (dup) {
+          if (c.hidden) dup.hidden = true;
+          const keepId = dup.listId || chatIdForUser(dup) || dup.id;
+          if (keepId && keepId !== cid) adoptChatId(cid, keepId);
+          return;
+        }
         // Surface chats with messages (e.g. pending delivered before online list remap)
         if ((c.messages && c.messages.length) || (c.unread || 0) > 0) {
-          byId.set(cid, {
-            id: cid,
+          byId.set(stableId, {
+            id: stableId,
             sessionToken: c.partnerSessionToken || null,
             profile: c.partnerProfile,
-            away: !c.registered,
+            away: false,
             online: false,
             registered: !!c.registered,
+            hidden: !!c.hidden,
             memberId: c.memberId || memberIdFromChatId(cid),
             email: c.partnerEmail || null
           });
+          if (cid !== stableId) adoptChatId(cid, stableId);
         }
       });
       const listForSidebar = Array.from(byId.values());
@@ -5661,6 +5824,7 @@
         const safeAge = p.age != null && p.age !== '' ? escapeHtml(String(p.age)) : '';
         const ageGender = [safeAge, genderBit].filter(Boolean).join('');
         const presence = user.online ? 'online' : (user.away ? 'away' : (member ? 'offline' : ''));
+        const isHiddenPerson = peopleHiddenFlag(user);
         const metaBits = [ageGender, locWithFlag, presence].filter(Boolean);
         row.innerHTML = `
           ${avatar}
@@ -5669,6 +5833,7 @@
               <div class="text-sm font-semibold truncate group-hover:brightness-110 transition" style="${nameStyle}">${safeName}</div>
               ${member ? '<span class="people-member-badge">Member</span>' : ''}
               ${user.away ? '<span class="people-away-badge">Away</span>' : ''}
+              ${hiddenBadgeHtml(isHiddenPerson)}
               ${hasUnread ? `<span class="ml-0.5 w-2 h-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse ring-1 ring-red-400"></span>` : ''}
             </div>
             <div class="text-[10px] theme-muted truncate">${metaBits.join(' • ')}</div>
@@ -5725,7 +5890,7 @@
         div.innerHTML = `
           ${avatar}
           <div class="min-w-0 flex-1">
-            <div class="font-medium truncate flex items-center gap-1" style="${nameStyle}">${escapeHtml(p.username || user.displayName || 'Anonymous')}${member ? ' <span class="people-member-badge">Member</span>' : ''}${user.away ? ' <span class="people-away-badge">Away</span>' : ''}</div>
+            <div class="font-medium truncate flex items-center gap-1" style="${nameStyle}">${escapeHtml(p.username || user.displayName || 'Anonymous')}${member ? ' <span class="people-member-badge">Member</span>' : ''}${user.away ? ' <span class="people-away-badge">Away</span>' : ''}${hiddenBadgeHtml(peopleHiddenFlag(user))}</div>
             <div class="text-[9px] theme-muted truncate">${metaBits.join(' • ')}</div>
             ${p.whatsOnMind ? `<div class="text-[8px] theme-muted italic truncate">${escapeHtml(p.whatsOnMind)}</div>` : ''}
           </div>
@@ -5766,7 +5931,7 @@
               : `<div class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-user text-sm sm:text-lg theme-muted"></i></div>`}
           </div>
           <div class="min-w-0 flex-1">
-            <div class="font-semibold text-sm sm:text-base truncate flex items-center gap-1" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}${chatData.registered || isMemberChatId(partnerId) ? ' <span class="people-member-badge">Member</span>' : ''}</div>
+            <div class="font-semibold text-sm sm:text-base truncate flex items-center gap-1" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}${chatData.registered || isMemberChatId(partnerId) ? ' <span class="people-member-badge">Member</span>' : ''}${hiddenBadgeHtml(!!chatData.hidden || !!(allOnlineUsers.find((u) => chatIdForUser(u) === partnerId || u.id === partnerId) || {}).hidden)}</div>
             <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${[headerProf.age != null && headerProf.age !== '' ? escapeHtml(String(headerProf.age)) : '', escapeHtml(headerProf.location || '')].filter(Boolean).join(' • ') || (chatData.registered ? 'Registered member' : 'Guest')}</div>
             ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate hidden sm:block">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
             ${headerProf.relationshipStatus && RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus]

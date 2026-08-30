@@ -168,11 +168,17 @@ function getSessionByToken(token) {
 }
 
 function resolveLiveSocketForTarget(targetId) {
-  // targetId may be current socket id OR a session token
+  // targetId may be current socket id, session token, or member:{publicId}
   if (!targetId) return { socket: null, session: null };
 
   let s = getLiveSocket(targetId);
   if (s) return { socket: s, session: getSessionBySocket(targetId) };
+
+  if (String(targetId).toLowerCase().startsWith('member:')) {
+    const pub = String(targetId).slice(7);
+    const acc = pub ? accounts.getAccountByPublicId(pub) : null;
+    if (acc && acc.email) return findLiveSocketForEmail(acc.email);
+  }
 
   // By session token (may be live or in grace)
   const byToken = getSessionByToken(targetId);
@@ -264,6 +270,30 @@ function stealthSessionForEmail(email) {
     if (sess && sess.stealth) return sess;
   }
   return null;
+}
+
+function isSessStealth(sess) {
+  return !!(sess && sess.stealth);
+}
+
+function memberChatIdForEmail(email) {
+  if (!email) return null;
+  const acc = accounts.getAccountByEmail(email);
+  if (!acc || !acc.verified) return null;
+  return 'member:' + accounts.publicIdOf(acc.email);
+}
+
+function senderPublicMeta(socket) {
+  const sess = socket ? getSessionBySocket(socket.id) : null;
+  const email = socket && (socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id)));
+  const chatId = memberChatIdForEmail(email);
+  return {
+    hidden: isSessStealth(sess) || !!(socket && socket.stealth),
+    registered: !!chatId,
+    memberId: chatId ? chatId.slice(7) : null,
+    email: chatId ? String(email).toLowerCase() : null,
+    partnerId: chatId || (socket && socket.id) || null
+  };
 }
 
 /** Queue event for a session that is offline / in grace (max 80 items). */
@@ -472,19 +502,25 @@ function buildOnlineList() {
       continue;
     }
 
-    // Prefer live socket id; during grace keep last socket id so clients can match chats
-    const id = live ? sess.socketId : sess.socketId || token;
+    // Prefer live socket id; during grace keep last socket id so clients can match chats.
+    // Registered members always use a stable member:{publicId} list id so the People
+    // list cannot grow a second dummy row keyed by socket id.
+    const socketId = live ? sess.socketId : sess.socketId || null;
+    const fallbackId = socketId || token;
     const email = emailBoundToSession(token, sess.socketId);
     const acc = email ? accounts.getAccountByEmail(email) : null;
     const registered = !!(acc && acc.verified);
+    const memberId = registered ? accounts.publicIdOf(email) : null;
     list.push({
-      id,
+      id: memberId ? ('member:' + memberId) : fallbackId,
+      socketId,
       sessionToken: token,
       profile: registered ? profileFromAccount(acc, sess.profile) : sess.profile,
       away: (!live && !!inGrace) || !!sess.browseHidden,
       online: !!live && !sess.browseHidden,
       registered,
-      memberId: registered ? accounts.publicIdOf(email) : null,
+      hidden: !!sess.stealth,
+      memberId,
       email: registered ? email : null,
       lastSeenAt: acc ? acc.lastSeenAt || null : null,
       lastLoginAt: acc ? acc.lastLoginAt || null : null
@@ -496,13 +532,16 @@ function buildOnlineList() {
 function memberPeopleEntry(acc, includeEmail) {
   if (!acc || !acc.verified) return null;
   const presence = presenceForEmail(acc.email) || {};
+  const stealthSess = stealthSessionForEmail(acc.email);
   const entry = {
     id: 'member:' + accounts.publicIdOf(acc.email),
+    socketId: presence.socketId || null,
     sessionToken: presence.sessionToken || null,
     profile: profileFromAccount(acc, presence.username ? { username: presence.username } : null),
     away: !!presence.away,
     online: !!presence.online,
     registered: true,
+    hidden: isSessStealth(stealthSess),
     memberId: accounts.publicIdOf(acc.email),
     lastSeenAt: acc.lastSeenAt || null,
     lastLoginAt: acc.lastLoginAt || null
@@ -528,7 +567,7 @@ function buildOnlineListForViewer(viewerSocketId, viewerToken) {
   for (const u of live) {
     if (!u) continue;
     const isSelf =
-      (viewerSocketId && u.id === viewerSocketId) ||
+      (viewerSocketId && (u.id === viewerSocketId || u.socketId === viewerSocketId)) ||
       (viewerToken && u.sessionToken === viewerToken) ||
       (viewerEmail && u.email && u.email === viewerEmail) ||
       (viewerMemberId && u.memberId && u.memberId === viewerMemberId);
@@ -539,12 +578,14 @@ function buildOnlineListForViewer(viewerSocketId, viewerToken) {
     if (liveSess && liveSess.stealth && !stealthVisibleTo(liveSess, viewerSocketId, viewerToken, viewerEmail, viewerMemberId)) {
       continue;
     }
-    if (viewerBlocksTarget(viewerSocketId, viewerToken, u.id, u.sessionToken)) continue;
+    if (viewerBlocksTarget(viewerSocketId, viewerToken, u.id, u.sessionToken) ||
+        (u.socketId && viewerBlocksTarget(viewerSocketId, viewerToken, u.socketId, u.sessionToken))) continue;
     if (viewerEmail && u.email && accounts.isBlockedAccount(viewerEmail, u.email)) continue;
     if (u.email) seenEmails.add(u.email);
     if (u.memberId) seenMemberIds.add(u.memberId);
     if (u.profile && u.profile.username) seenUsernames.add(String(u.profile.username).toLowerCase());
     const copy = Object.assign({}, u);
+    copy.hidden = !!(liveSess && liveSess.stealth) || !!u.hidden;
     if (!includeEmail) delete copy.email;
     out.push(copy);
   }
@@ -919,6 +960,7 @@ io.on('connection', (socket) => {
         }
         const presence = presenceForEmail(memberEmail) || {};
         noteStealthReveal(socket, targetId);
+        const targetStealth = stealthSessionForEmail(memberEmail);
         socket.emit('chat-started', {
           partnerId: 'member:' + accounts.publicIdOf(memberEmail),
           partnerProfile: profileFromAccount(memberAcc, presence.username ? { username: presence.username } : null),
@@ -928,6 +970,7 @@ io.on('connection', (socket) => {
           email: memberEmail,
           online: !!presence.online,
           away: !!presence.away,
+          hidden: isSessStealth(targetStealth),
           lastSeenAt: memberAcc.lastSeenAt || null,
           lastLoginAt: memberAcc.lastLoginAt || null
         });
@@ -943,13 +986,18 @@ io.on('connection', (socket) => {
       const targetSess = live.session;
       const memberMeta = {
         registered: true,
-        memberId: accounts.publicIdOf(memberEmail)
+        memberId: accounts.publicIdOf(memberEmail),
+        email: memberEmail,
+        hidden: isSessStealth(targetSess) || isSessStealth(stealthSessionForEmail(memberEmail))
       };
+      const meMeta = senderPublicMeta(socket);
+      const memberPartnerId = 'member:' + accounts.publicIdOf(memberEmail);
       if (!targetSocket && targetSess && isSessionInGrace(targetSess)) {
         const myProfile = socket.profile;
         const awayToken = sessionTokenOf(targetSess);
+        noteStealthReveal(socket, targetId);
         socket.emit('chat-started', {
-          partnerId: targetSess.socketId || targetId,
+          partnerId: memberPartnerId,
           partnerProfile: profileFromAccount(memberAcc, targetSess.profile),
           partnerSessionToken: awayToken,
           ...memberMeta,
@@ -959,9 +1007,12 @@ io.on('connection', (socket) => {
         queuePending(targetSess, {
           type: 'chat-started',
           payload: {
-            partnerId: socket.id,
+            partnerId: meMeta.partnerId || socket.id,
             partnerProfile: myProfile,
-            partnerSessionToken: socket.sessionToken
+            partnerSessionToken: socket.sessionToken,
+            hidden: meMeta.hidden,
+            registered: meMeta.registered,
+            memberId: meMeta.memberId
           }
         });
         return;
@@ -980,16 +1031,20 @@ io.on('connection', (socket) => {
       }
       noteStealthReveal(socket, targetId);
       socket.emit('chat-started', {
-        partnerId: targetSocket.id,
+        partnerId: memberPartnerId,
         partnerProfile: profileFromAccount(memberAcc, targetSess.profile),
         partnerSessionToken: theirTok,
         ...memberMeta,
         online: true
       });
+      // Deliver even if the member is hidden — they still receive the chat.
       targetSocket.emit('chat-started', {
-        partnerId: socket.id,
+        partnerId: meMeta.partnerId || socket.id,
         partnerProfile: socket.profile,
-        partnerSessionToken: socket.sessionToken
+        partnerSessionToken: socket.sessionToken,
+        hidden: meMeta.hidden,
+        registered: meMeta.registered,
+        memberId: meMeta.memberId
       });
       broadcastStats();
       return;
@@ -1041,15 +1096,23 @@ io.on('connection', (socket) => {
     const theirToken = theirTok;
 
     noteStealthReveal(socket, targetId);
+    const meMeta = senderPublicMeta(socket);
+    const theirMeta = senderPublicMeta(targetSocket);
     socket.emit('chat-started', {
-      partnerId: targetSocket.id,
+      partnerId: theirMeta.partnerId || targetSocket.id,
       partnerProfile: theirProfile,
-      partnerSessionToken: theirToken
+      partnerSessionToken: theirToken,
+      hidden: theirMeta.hidden,
+      registered: theirMeta.registered,
+      memberId: theirMeta.memberId
     });
     targetSocket.emit('chat-started', {
-      partnerId: socket.id,
+      partnerId: meMeta.partnerId || socket.id,
       partnerProfile: myProfile,
-      partnerSessionToken: socket.sessionToken
+      partnerSessionToken: socket.sessionToken,
+      hidden: meMeta.hidden,
+      registered: meMeta.registered,
+      memberId: meMeta.memberId
     });
 
     broadcastStats();
@@ -1105,12 +1168,15 @@ io.on('connection', (socket) => {
       };
     }
 
+    const senderMeta = senderPublicMeta(socket);
     const payload = {
       msgId,
       text: clean,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id,
       senderSessionToken: socket.sessionToken,
+      senderMemberId: senderMeta.memberId,
+      senderHidden: senderMeta.hidden,
       replyTo,
       senderProfile: socket.profile
         ? {
@@ -1175,6 +1241,7 @@ io.on('connection', (socket) => {
     const attachment = data && data.attachment;
     if (!targetId || !attachment || !attachment.data) return;
 
+    let attDeliverId = targetId;
     const attMember = resolveMemberEmail(targetId);
     if (attMember) {
       const meEmail = socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id));
@@ -1183,14 +1250,15 @@ io.on('connection', (socket) => {
         return;
       }
       const live = findLiveSocketForEmail(attMember);
-      if (live.socket) data.targetId = live.socket.id;
+      if (live.socket) attDeliverId = live.socket.id;
+      else if (live.session && isSessionInGrace(live.session)) attDeliverId = live.session.socketId || sessionTokenOf(live.session);
       else {
         socket.emit('chat-error', { message: 'They are not in chat right now.' });
         return;
       }
     }
 
-    if (isBlocked(socket.id, targetId)) return;
+    if (isBlocked(socket.id, attDeliverId)) return;
 
     if (
       !attachment.type ||
@@ -1206,12 +1274,15 @@ io.on('connection', (socket) => {
       data.msgId && /^[a-zA-Z0-9_-]{8,40}$/.test(String(data.msgId))
         ? String(data.msgId)
         : crypto.randomBytes(8).toString('hex');
+    const attSenderMeta = senderPublicMeta(socket);
     const payload = {
       msgId: attMsgId,
       attachment,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       senderId: socket.id,
       senderSessionToken: socket.sessionToken,
+      senderMemberId: attSenderMeta.memberId,
+      senderHidden: attSenderMeta.hidden,
       senderProfile: socket.profile
         ? {
             username: socket.profile.username,
@@ -1229,8 +1300,9 @@ io.on('connection', (socket) => {
     };
 
     features.registerMessageOwner(attMsgId, socket.sessionToken || socket.id);
+    noteStealthReveal(socket, attDeliverId);
 
-    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(attDeliverId);
 
     if (targetSess && isSessionInGrace(targetSess)) {
       queuePending(targetSess, { type: 'attachment', payload: { ...payload, fromSelf: false } });
@@ -1815,6 +1887,7 @@ io.on('connection', (socket) => {
       return;
     }
     noteStealthReveal(socket, partner);
+    const inboxSender = senderPublicMeta(socket);
 
     const liveCount = emitToEmail(partner, 'inbox-new', {
       threadId: result.threadId,
@@ -1822,6 +1895,7 @@ io.on('connection', (socket) => {
       from: me.email,
       fromName,
       fromPublicId: accounts.publicIdOf(me.email),
+      hidden: inboxSender.hidden,
       unread: inbox.unreadCount(partner)
     });
     if (liveCount > 0) {
