@@ -22,7 +22,21 @@ const io = new Server(server, {
 });
 
 app.use(express.json({ limit: '32kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+  if (host === 'www.pineapplechat.com') {
+    return res.redirect(301, 'https://pineapplechat.com' + req.originalUrl);
+  }
+  next();
+});
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (/\.(?:js|css|png|jpe?g|svg|webp|woff2)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }
+}));
 
 const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
 /** Keep user on the online list as away & allow seamless rejoin for this long after disconnect */

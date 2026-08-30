@@ -1,0 +1,8 @@
+# https://pineapplechat.com
+User-agent: *
+Allow: /
+
+Disallow: /api/
+Disallow: /socket.io/
+
+Sitemap: https://pineapplechat.com/sitemap.xml

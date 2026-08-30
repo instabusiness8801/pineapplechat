@@ -75,6 +75,16 @@ if (ageHasMin) {
   process.exit(1);
 }
 
+const pubFiles = ['robots.txt', 'sitemap.xml', 'og-image.jpg', 'favicon.svg', 'site.webmanifest', 'apple-touch-icon.png'];
+for (const f of pubFiles) {
+  const p = path.join(__dirname, '..', 'public', f);
+  if (!fs.existsSync(p)) {
+    console.error('MISSING FILE:', f);
+    process.exit(1);
+  }
+}
+console.log('SEO FILES OK');
+
 const required = [
   ['world-locations.js', 'country list script'],
   ['AVATAR_PRESETS', 'avatar presets'],
@@ -120,7 +130,12 @@ const required = [
   ['signed-in-chat-card', 'signed-in skip start form'],
   ['hidden-mode-btn', 'hidden mode toggle'],
   ['you-bar', 'own username bar'],
-  ['people-hidden-badge', 'hidden badge on people list']
+  ['people-hidden-badge', 'hidden badge on people list'],
+  ['Random Chat &amp; Friend Chat Online', 'SEO title'],
+  ['application/ld+json', 'JSON-LD structured data'],
+  ['og:image', 'Open Graph image'],
+  ['How random chat works', 'SEO how-it-works copy'],
+  ['Friend chat and inbox', 'SEO friend-chat copy']
 ];
 const maleAvatars = (html.match(/gender: 'male'/g) || []).length;
 const femaleAvatars = (html.match(/gender: 'female'/g) || []).length;
