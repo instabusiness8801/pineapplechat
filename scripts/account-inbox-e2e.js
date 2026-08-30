@@ -34,7 +34,9 @@ async function main() {
   const alice = await connect();
   const bob = await connect();
 
-  const regA = await emitAck(alice, 'account-register', { email: aliceEmail, password: pass });
+  const profileA = { displayName: 'Alice', gender: 'female', age: 24, country: 'India', city: 'Mumbai' };
+  const profileB = { displayName: 'Bob', gender: 'male', age: 26, country: 'India', city: 'Mumbai' };
+  const regA = await emitAck(alice, 'account-register', { email: aliceEmail, password: pass, ...profileA });
   if (!regA || !regA.ok) throw new Error('alice register failed: ' + JSON.stringify(regA));
   if (!regA.devCode) throw new Error('expected devCode when ALLOW_DEV_CODES=true');
   const verA = await emitAck(alice, 'account-verify', { email: aliceEmail, code: regA.devCode });
@@ -43,7 +45,7 @@ async function main() {
   }
   if (!verA.authToken) throw new Error('verify should return authToken');
 
-  const regB = await emitAck(bob, 'account-register', { email: bobEmail, password: pass });
+  const regB = await emitAck(bob, 'account-register', { email: bobEmail, password: pass, ...profileB });
   if (!regB || !regB.ok || !regB.devCode) throw new Error('bob register failed');
   const verB = await emitAck(bob, 'account-verify', { email: bobEmail, code: regB.devCode });
   if (!verB || !verB.ok) throw new Error('bob verify failed: ' + JSON.stringify(verB));
@@ -84,6 +86,8 @@ async function main() {
     throw new Error('unread should be 0 after open, got ' + JSON.stringify(unreadAfterOpen));
   }
 
+  await emitAck(alice, 'account-delete', { password: pass }).catch(() => {});
+  await emitAck(bob, 'account-delete', { password: pass }).catch(() => {});
   alice.close();
   bob.close();
   console.log('ACCOUNT + INBOX E2E OK');

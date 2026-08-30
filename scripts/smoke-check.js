@@ -113,7 +113,13 @@ const required = [
   ['member-profile-form', 'member profile form'],
   ['delete-account-btn', 'delete account'],
   ['member-avatars-male', 'male member avatars'],
-  ['member-avatars-female', 'female member avatars']
+  ['member-avatars-female', 'female member avatars'],
+  ['reg-display-name', 'register display name'],
+  ['Forgot password', 'password reset link'],
+  ['auth-panel-reset', 'password reset panel'],
+  ['signed-in-chat-card', 'signed-in skip start form'],
+  ['hidden-mode-btn', 'hidden mode toggle'],
+  ['you-bar', 'own username bar']
 ];
 const maleAvatars = (html.match(/gender: 'male'/g) || []).length;
 const femaleAvatars = (html.match(/gender: 'female'/g) || []).length;

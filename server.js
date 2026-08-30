@@ -25,8 +25,8 @@ app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 const ENABLE_DEMO_USERS = process.env.ENABLE_DEMO_USERS === 'true';
-/** Keep user on the online list & allow seamless rejoin for this long after disconnect */
-const SESSION_GRACE_MS = 15 * 60 * 1000;
+/** Keep user on the online list as away & allow seamless rejoin for this long after disconnect */
+const SESSION_GRACE_MS = 10 * 60 * 1000;
 
 app.get('/api/config', (req, res) => {
   res.json({
@@ -55,14 +55,7 @@ app.get('/api/config', (req, res) => {
 });
 
 app.get('/api/members', (req, res) => {
-  res.json(accounts.listPublicMembers((email) => {
-    for (const sock of io.sockets.sockets.values()) {
-      if (sock.connected && sock.accountEmail === email) {
-        return { online: true, away: false };
-      }
-    }
-    return null;
-  }));
+  res.json(accounts.listPublicMembers((email) => presenceForEmail(email)));
 });
 
 app.get('/api/invite/:code', (req, res) => {
@@ -211,6 +204,68 @@ function isSessionInGrace(sess) {
   return Date.now() - sess.disconnectedAt < SESSION_GRACE_MS;
 }
 
+function revealStealthFromSocket(socket, targetSocketId, targetToken, targetEmail, targetMemberId) {
+  const tok = (socket && (socket.sessionToken || socketToSession.get(socket.id))) || null;
+  const sess = tok ? sessions.get(tok) : null;
+  if (!sess || !sess.stealth) return false;
+  if (!sess.revealedTo) sess.revealedTo = new Set();
+  if (targetSocketId) sess.revealedTo.add('sid:' + targetSocketId);
+  if (targetToken) sess.revealedTo.add('tok:' + targetToken);
+  if (targetEmail) sess.revealedTo.add('em:' + String(targetEmail).toLowerCase());
+  if (targetMemberId) sess.revealedTo.add('mid:' + targetMemberId);
+  return true;
+}
+
+function stealthVisibleTo(sess, viewerSocketId, viewerToken, viewerEmail, viewerMemberId) {
+  if (!sess || !sess.stealth) return true;
+  const r = sess.revealedTo;
+  if (!r || !r.size) return false;
+  if (viewerSocketId && r.has('sid:' + viewerSocketId)) return true;
+  if (viewerToken && r.has('tok:' + viewerToken)) return true;
+  if (viewerEmail && r.has('em:' + String(viewerEmail).toLowerCase())) return true;
+  if (viewerMemberId && r.has('mid:' + viewerMemberId)) return true;
+  return false;
+}
+
+function noteStealthReveal(socket, targetId) {
+  if (!socket || !targetId) return;
+  const memberEmail = resolveMemberEmail(targetId);
+  let tSock = null;
+  let tSess = null;
+  if (memberEmail) {
+    const live = findLiveSocketForEmail(memberEmail);
+    tSock = live.socket;
+    tSess = live.session;
+  } else {
+    const live = resolveLiveSocketForTarget(targetId);
+    tSock = live.socket;
+    tSess = live.session;
+  }
+  const tTok = tSess ? sessionTokenOf(tSess) : (tSock && (tSock.sessionToken || socketToSession.get(tSock.id)));
+  const mid = memberEmail ? accounts.publicIdOf(memberEmail) : null;
+  if (revealStealthFromSocket(socket, tSock && tSock.id, tTok, memberEmail, mid)) {
+    broadcastOnlineUsers();
+    broadcastStats();
+  }
+}
+
+function stealthSessionForEmail(email) {
+  const target = String(email || '').toLowerCase();
+  if (!target) return null;
+  const tok = accounts.findSessionTokenForEmail(target);
+  if (tok) {
+    const sess = getSessionByToken(tok);
+    if (sess && sess.stealth) return sess;
+  }
+  for (const sock of io.sockets.sockets.values()) {
+    if (!sock.connected) continue;
+    if (String(sock.accountEmail || '').toLowerCase() !== target) continue;
+    const sess = getSessionBySocket(sock.id);
+    if (sess && sess.stealth) return sess;
+  }
+  return null;
+}
+
 /** Queue event for a session that is offline / in grace (max 80 items). */
 function queuePending(sess, entry) {
   if (!sess) return false;
@@ -297,6 +352,110 @@ function forceLogoutSocket(socket, reason) {
   return removed;
 }
 
+function emailBoundToSession(token, socketId) {
+  const fromBind = accounts.getEmailForSession(token);
+  if (fromBind) return fromBind;
+  const sock = getLiveSocket(socketId);
+  if (sock && sock.accountEmail) return String(sock.accountEmail).toLowerCase();
+  return null;
+}
+
+function stripMemberPrefix(raw) {
+  const s = String(raw || '').trim();
+  if (s.toLowerCase().startsWith('member:')) return s.slice(7);
+  return s;
+}
+
+function resolveMemberEmail(raw) {
+  if (!raw) return null;
+  let s = stripMemberPrefix(raw);
+  if (!s) return null;
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return s.toLowerCase();
+  const byPublic = accounts.getAccountByPublicId(s);
+  if (byPublic) return byPublic.email;
+  const bySess = accounts.getEmailForSession(s);
+  if (bySess) return bySess;
+  const { socket: liveSock, session: liveSess } = resolveLiveSocketForTarget(raw);
+  if (liveSock && liveSock.accountEmail) return String(liveSock.accountEmail).toLowerCase();
+  if (liveSess) {
+    const tok = sessionTokenOf(liveSess);
+    const em = accounts.getEmailForSession(tok);
+    if (em) return em;
+  }
+  return null;
+}
+
+function findLiveSocketForEmail(email) {
+  const target = String(email || '').toLowerCase();
+  if (!target) return { socket: null, session: null };
+  for (const sock of io.sockets.sockets.values()) {
+    if (!sock.connected) continue;
+    if (String(sock.accountEmail || '').toLowerCase() === target) {
+      const sess = getSessionBySocket(sock.id) || getSessionByToken(sock.sessionToken);
+      return { socket: sock, session: sess };
+    }
+  }
+  const tok = accounts.findSessionTokenForEmail(target);
+  if (tok) {
+    const sess = getSessionByToken(tok);
+    if (sess) return { socket: getLiveSocket(sess.socketId), session: sess };
+  }
+  return { socket: null, session: null };
+}
+
+function presenceForEmail(email) {
+  const target = String(email || '').toLowerCase();
+  if (!target) return null;
+  if (isAccountSocketOnline(target)) {
+    const tok = accounts.findSessionTokenForEmail(target);
+    const sess = tok ? getSessionByToken(tok) : null;
+    return {
+      online: true,
+      away: false,
+      username: (sess && sess.profile && sess.profile.username) || null,
+      sessionToken: tok || null,
+      socketId: (sess && sess.socketId) || null
+    };
+  }
+  const tok = accounts.findSessionTokenForEmail(target);
+  if (!tok) return null;
+  const sess = getSessionByToken(tok);
+  if (!sess) return null;
+  const live = sess.socketId && getLiveSocket(sess.socketId);
+  const away = !live && isSessionInGrace(sess);
+  if (!live && !away) return null;
+  return {
+    online: !!live,
+    away: !!away,
+    username: (sess.profile && sess.profile.username) || null,
+    sessionToken: tok,
+    socketId: sess.socketId || null
+  };
+}
+
+function profileFromAccount(acc, liveProfile) {
+  const p = liveProfile || {};
+  const display = (p.username && String(p.username).trim()) || (acc && acc.displayName) || (acc && acc.email && acc.email.split('@')[0]) || 'Member';
+  const country = p.country || (acc && acc.country) || '';
+  const city = p.city || (acc && acc.city) || '';
+  const location = p.location || (city && country ? city + ', ' + country : (country || city || ''));
+  const interests = (p.interests && p.interests.length)
+    ? p.interests
+    : (acc && Array.isArray(acc.interests) ? acc.interests.slice(0, 5) : []);
+  return {
+    username: display,
+    age: p.age != null ? p.age : null,
+    gender: p.gender || (acc && acc.gender) || null,
+    country: country || null,
+    city: city || null,
+    location,
+    image: p.image || (acc && acc.image) || null,
+    whatsOnMind: p.whatsOnMind || null,
+    interests,
+    relationshipStatus: p.relationshipStatus || null
+  };
+}
+
 function buildOnlineList() {
   const list = [];
   const now = Date.now();
@@ -315,25 +474,108 @@ function buildOnlineList() {
 
     // Prefer live socket id; during grace keep last socket id so clients can match chats
     const id = live ? sess.socketId : sess.socketId || token;
+    const email = emailBoundToSession(token, sess.socketId);
+    const acc = email ? accounts.getAccountByEmail(email) : null;
+    const registered = !!(acc && acc.verified);
     list.push({
       id,
       sessionToken: token,
-      profile: sess.profile,
-      away: !live && !!inGrace
+      profile: registered ? profileFromAccount(acc, sess.profile) : sess.profile,
+      away: (!live && !!inGrace) || !!sess.browseHidden,
+      online: !!live && !sess.browseHidden,
+      registered,
+      memberId: registered ? accounts.publicIdOf(email) : null,
+      email: registered ? email : null,
+      lastSeenAt: acc ? acc.lastSeenAt || null : null,
+      lastLoginAt: acc ? acc.lastLoginAt || null : null
     });
   }
   return list;
 }
 
+function memberPeopleEntry(acc, includeEmail) {
+  if (!acc || !acc.verified) return null;
+  const presence = presenceForEmail(acc.email) || {};
+  const entry = {
+    id: 'member:' + accounts.publicIdOf(acc.email),
+    sessionToken: presence.sessionToken || null,
+    profile: profileFromAccount(acc, presence.username ? { username: presence.username } : null),
+    away: !!presence.away,
+    online: !!presence.online,
+    registered: true,
+    memberId: accounts.publicIdOf(acc.email),
+    lastSeenAt: acc.lastSeenAt || null,
+    lastLoginAt: acc.lastLoginAt || null
+  };
+  if (includeEmail) entry.email = acc.email;
+  return entry;
+}
+
 function buildOnlineListForViewer(viewerSocketId, viewerToken) {
-  const list = buildOnlineList();
-  if (!viewerSocketId && !viewerToken) return list;
-  return list.filter((u) => {
-    if (!u) return false;
-    if (viewerSocketId && u.id === viewerSocketId) return true; // keep self out client-side anyway
-    if (viewerToken && u.sessionToken === viewerToken) return true;
-    return !viewerBlocksTarget(viewerSocketId, viewerToken, u.id, u.sessionToken);
+  const live = buildOnlineList();
+  const viewerSock = getLiveSocket(viewerSocketId);
+  const viewerEmail =
+    accounts.getEmailForSession(viewerToken) ||
+    (viewerSock && viewerSock.accountEmail && String(viewerSock.accountEmail).toLowerCase()) ||
+    null;
+  const viewerMemberId = viewerEmail ? accounts.publicIdOf(viewerEmail) : null;
+  const includeEmail = !!viewerEmail;
+  const seenEmails = new Set();
+  const seenMemberIds = new Set();
+  const seenUsernames = new Set();
+  const out = [];
+
+  for (const u of live) {
+    if (!u) continue;
+    const isSelf =
+      (viewerSocketId && u.id === viewerSocketId) ||
+      (viewerToken && u.sessionToken === viewerToken) ||
+      (viewerEmail && u.email && u.email === viewerEmail) ||
+      (viewerMemberId && u.memberId && u.memberId === viewerMemberId);
+    if (isSelf) {
+      continue;
+    }
+    const liveSess = u.sessionToken ? sessions.get(u.sessionToken) : null;
+    if (liveSess && liveSess.stealth && !stealthVisibleTo(liveSess, viewerSocketId, viewerToken, viewerEmail, viewerMemberId)) {
+      continue;
+    }
+    if (viewerBlocksTarget(viewerSocketId, viewerToken, u.id, u.sessionToken)) continue;
+    if (viewerEmail && u.email && accounts.isBlockedAccount(viewerEmail, u.email)) continue;
+    if (u.email) seenEmails.add(u.email);
+    if (u.memberId) seenMemberIds.add(u.memberId);
+    if (u.profile && u.profile.username) seenUsernames.add(String(u.profile.username).toLowerCase());
+    const copy = Object.assign({}, u);
+    if (!includeEmail) delete copy.email;
+    out.push(copy);
+  }
+
+  const members = accounts.listActiveAccounts ? accounts.listActiveAccounts() : [];
+  for (const acc of members) {
+    if (!acc || !acc.email) continue;
+    if (viewerEmail && acc.email === viewerEmail) continue;
+    if (seenEmails.has(acc.email)) continue;
+    const mid = accounts.publicIdOf(acc.email);
+    if (seenMemberIds.has(mid)) continue;
+    const dname = acc.displayName ? String(acc.displayName).toLowerCase() : '';
+    if (dname && seenUsernames.has(dname)) continue;
+    const stealthSess = stealthSessionForEmail(acc.email);
+    if (stealthSess && !stealthVisibleTo(stealthSess, viewerSocketId, viewerToken, viewerEmail, viewerMemberId)) {
+      continue;
+    }
+    if (viewerEmail && accounts.isBlockedAccount(viewerEmail, acc.email)) continue;
+    const entry = memberPeopleEntry(acc, includeEmail);
+    if (entry) out.push(entry);
+  }
+
+  out.sort((a, b) => {
+    const ao = a.online ? 2 : (a.away ? 1 : 0);
+    const bo = b.online ? 2 : (b.away ? 1 : 0);
+    if (ao !== bo) return bo - ao;
+    const an = (a.profile && a.profile.username) || '';
+    const bn = (b.profile && b.profile.username) || '';
+    return String(an).localeCompare(String(bn));
   });
+  return out;
 }
 
 function broadcastOnlineUsers() {
@@ -346,8 +588,8 @@ function broadcastOnlineUsers() {
 }
 
 function broadcastStats() {
-  const list = buildOnlineList();
-  const online = list.length;
+  const list = buildOnlineListForViewer(null, null);
+  const online = list.filter((u) => u && u.online).length;
   let chattingPairs = 0;
   const seen = new Set();
   for (const [a, b] of pairs.entries()) {
@@ -442,6 +684,18 @@ io.on('connection', (socket) => {
 
   socket.on('set-profile', (profile) => {
     const cleanedProfile = profile || {};
+    const accountEmail = socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id));
+    const acc = accountEmail ? accounts.getAccountByEmail(accountEmail) : null;
+    if (cleanedProfile.fromAccount && acc && acc.verified) {
+      if (!cleanedProfile.username) cleanedProfile.username = acc.displayName || acc.email.split('@')[0];
+      if (!cleanedProfile.gender) cleanedProfile.gender = acc.gender || 'male';
+      if (!cleanedProfile.country) cleanedProfile.country = acc.country || '';
+      if (!cleanedProfile.city) cleanedProfile.city = acc.city || '';
+      if (!cleanedProfile.image) cleanedProfile.image = acc.image || '';
+      if (!cleanedProfile.interests && acc.interests) cleanedProfile.interests = acc.interests.slice();
+      if (!safety.isValidAge(cleanedProfile.age)) cleanedProfile.age = 18;
+      cleanedProfile.agreedToTerms = true;
+    }
 
     const country = (cleanedProfile.country || '').trim();
     const city = (cleanedProfile.city || '').trim();
@@ -614,11 +868,16 @@ io.on('connection', (socket) => {
     socket.profile = cleanedProfile;
     socket.sessionToken = token;
     socket.intentionalLogout = false; // joined / re-joined after log off
+    sess.browseHidden = false;
+    if (typeof socket.stealth === 'boolean') sess.stealth = socket.stealth;
+    if (!sess.revealedTo) sess.revealedTo = new Set();
 
     if (socket.accountEmail) {
       accounts.bindSession(token, socket.accountEmail);
-      accounts.setDisplayName(socket.accountEmail, cleanedProfile.username);
       const acc = accounts.getAccountByEmail(socket.accountEmail);
+      if (acc && acc.verified && !acc.displayName) {
+        accounts.setDisplayName(socket.accountEmail, cleanedProfile.username);
+      }
       if (acc && acc.verified) {
         const patch = {};
         if (!acc.gender && cleanedProfile.gender) patch.gender = cleanedProfile.gender;
@@ -648,6 +907,93 @@ io.on('connection', (socket) => {
   socket.on('start-chat-with', (data) => {
     const targetId = data && data.targetId;
     if (!targetId || targetId === socket.id) return;
+
+    const memberEmail = resolveMemberEmail(targetId);
+    const memberAcc = memberEmail ? accounts.getAccountByEmail(memberEmail) : null;
+    if (memberAcc && memberAcc.verified) {
+      const meEmail = socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id));
+      if (meEmail) {
+        if (!accounts.isOwner(meEmail) && accounts.isBlockedAccount(meEmail, memberEmail)) {
+          socket.emit('chat-error', { message: 'You have blocked this user or they have blocked you.' });
+          return;
+        }
+        const presence = presenceForEmail(memberEmail) || {};
+        noteStealthReveal(socket, targetId);
+        socket.emit('chat-started', {
+          partnerId: 'member:' + accounts.publicIdOf(memberEmail),
+          partnerProfile: profileFromAccount(memberAcc, presence.username ? { username: presence.username } : null),
+          partnerSessionToken: presence.sessionToken || null,
+          registered: true,
+          memberId: accounts.publicIdOf(memberEmail),
+          email: memberEmail,
+          online: !!presence.online,
+          away: !!presence.away,
+          lastSeenAt: memberAcc.lastSeenAt || null,
+          lastLoginAt: memberAcc.lastLoginAt || null
+        });
+        return;
+      }
+      // Guest ↔ member: live chat only (no inbox, no friends)
+      if (!socket.sessionToken || !getSessionByToken(socket.sessionToken)) {
+        socket.emit('chat-error', { message: 'Please complete your profile first.' });
+        return;
+      }
+      const live = findLiveSocketForEmail(memberEmail);
+      const targetSocket = live.socket;
+      const targetSess = live.session;
+      const memberMeta = {
+        registered: true,
+        memberId: accounts.publicIdOf(memberEmail)
+      };
+      if (!targetSocket && targetSess && isSessionInGrace(targetSess)) {
+        const myProfile = socket.profile;
+        const awayToken = sessionTokenOf(targetSess);
+        socket.emit('chat-started', {
+          partnerId: targetSess.socketId || targetId,
+          partnerProfile: profileFromAccount(memberAcc, targetSess.profile),
+          partnerSessionToken: awayToken,
+          ...memberMeta,
+          away: true,
+          online: false
+        });
+        queuePending(targetSess, {
+          type: 'chat-started',
+          payload: {
+            partnerId: socket.id,
+            partnerProfile: myProfile,
+            partnerSessionToken: socket.sessionToken
+          }
+        });
+        return;
+      }
+      if (!targetSocket || !targetSess) {
+        socket.emit('chat-error', {
+          message: 'They are not in chat right now. Register to send an inbox message they will see later.'
+        });
+        return;
+      }
+      const myTok = socket.sessionToken || socketToSession.get(socket.id);
+      const theirTok = socketToSession.get(targetSocket.id) || sessionTokenOf(targetSess);
+      if (isBlockedBetween(socket.id, targetSocket.id, myTok, theirTok)) {
+        socket.emit('chat-error', { message: 'You have blocked this user or they have blocked you.' });
+        return;
+      }
+      noteStealthReveal(socket, targetId);
+      socket.emit('chat-started', {
+        partnerId: targetSocket.id,
+        partnerProfile: profileFromAccount(memberAcc, targetSess.profile),
+        partnerSessionToken: theirTok,
+        ...memberMeta,
+        online: true
+      });
+      targetSocket.emit('chat-started', {
+        partnerId: socket.id,
+        partnerProfile: socket.profile,
+        partnerSessionToken: socket.sessionToken
+      });
+      broadcastStats();
+      return;
+    }
 
     if (!socket.sessionToken || !getSessionByToken(socket.sessionToken)) {
       socket.emit('chat-error', { message: 'Please complete your profile first.' });
@@ -694,6 +1040,7 @@ io.on('connection', (socket) => {
     const theirProfile = targetSess.profile;
     const theirToken = theirTok;
 
+    noteStealthReveal(socket, targetId);
     socket.emit('chat-started', {
       partnerId: targetSocket.id,
       partnerProfile: theirProfile,
@@ -717,6 +1064,21 @@ io.on('connection', (socket) => {
     if (!rl.ok) {
       socket.emit('chat-error', { message: rl.message });
       return;
+    }
+
+    let deliverId = targetId;
+    const memberEmail = resolveMemberEmail(targetId);
+    const memberAcc = memberEmail ? accounts.getAccountByEmail(memberEmail) : null;
+    if (memberAcc && memberAcc.verified) {
+      const meEmail = socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id));
+      if (meEmail) return; // registered → member uses inbox
+      const live = findLiveSocketForEmail(memberEmail);
+      if (live.socket) deliverId = live.socket.id;
+      else if (live.session && isSessionInGrace(live.session)) deliverId = live.session.socketId || sessionTokenOf(live.session);
+      else {
+        socket.emit('chat-error', { message: 'They are not in chat right now. Register to leave an inbox message.' });
+        return;
+      }
     }
 
     const check = safety.validateChatText(text);
@@ -768,10 +1130,11 @@ io.on('connection', (socket) => {
 
     // Track ownership for silent unsend/delete
     features.registerMessageOwner(msgId, socket.sessionToken || socket.id);
+    noteStealthReveal(socket, deliverId);
 
-    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(deliverId);
     const targetTok = targetSess ? sessionTokenOf(targetSess) : null;
-    if (isBlockedBetween(socket.id, targetId, socket.sessionToken, targetTok)) return;
+    if (isBlockedBetween(socket.id, deliverId, socket.sessionToken, targetTok)) return;
 
     // Always queue when target is in grace (even if a zombie socket still looks "connected")
     if (targetSess && isSessionInGrace(targetSess)) {
@@ -781,7 +1144,7 @@ io.on('connection', (socket) => {
       socket.emit('delivery-status', {
         targetId,
         queued: true,
-        message: 'User is reconnecting — message will be delivered when they are back (within 15 min).'
+        message: 'User is reconnecting — message will be delivered when they are back (within 10 min).'
       });
       return;
     }
@@ -799,7 +1162,7 @@ io.on('connection', (socket) => {
       socket.emit('delivery-status', {
         targetId,
         queued: true,
-        message: 'User is reconnecting — message will be delivered when they are back (within 15 min).'
+        message: 'User is reconnecting — message will be delivered when they are back (within 10 min).'
       });
       return;
     }
@@ -811,6 +1174,21 @@ io.on('connection', (socket) => {
     const targetId = data && data.targetId;
     const attachment = data && data.attachment;
     if (!targetId || !attachment || !attachment.data) return;
+
+    const attMember = resolveMemberEmail(targetId);
+    if (attMember) {
+      const meEmail = socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id));
+      if (meEmail) {
+        socket.emit('chat-error', { message: 'Photos and voice notes to members are coming soon. Send a text message for now.' });
+        return;
+      }
+      const live = findLiveSocketForEmail(attMember);
+      if (live.socket) data.targetId = live.socket.id;
+      else {
+        socket.emit('chat-error', { message: 'They are not in chat right now.' });
+        return;
+      }
+    }
 
     if (isBlocked(socket.id, targetId)) return;
 
@@ -911,6 +1289,13 @@ io.on('connection', (socket) => {
     const theirToken = targetSess ? sessionTokenOf(targetSess) : (data.targetSessionToken || null);
 
     blockPair(socket.id, myToken, targetId, theirToken);
+    const meEmail = socket.accountEmail || accounts.getEmailForSession(myToken);
+    const memberEmail = resolveMemberEmail(targetId) || resolveMemberEmail(theirToken);
+    if (meEmail && memberEmail) {
+      const tok = myToken || socket.id;
+      accounts.bindSession(tok, meEmail);
+      accounts.blockAccount(tok, memberEmail);
+    }
     // Mutual block effect for messaging: also mark reverse socket-level if live
     if (targetSocket) {
       blockPair(targetSocket.id, theirToken, socket.id, myToken);
@@ -965,7 +1350,9 @@ io.on('connection', (socket) => {
 
   function resolveAccountEmail(raw) {
     if (!raw) return null;
-    const s = String(raw).trim();
+    const via = resolveMemberEmail(raw);
+    if (via) return via;
+    const s = stripMemberPrefix(raw);
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return s.toLowerCase();
     const { session: tSess } = resolveLiveSocketForTarget(s);
     if (tSess) {
@@ -1021,9 +1408,67 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack(rl);
       return;
     }
-    const result = await accounts.register(data && data.email, data && data.password);
+    const rawProfile = {
+      displayName: data && (data.displayName || data.username),
+      gender: data && data.gender,
+      age: data && data.age,
+      country: data && data.country,
+      city: data && data.city,
+      interests: data && data.interests,
+      image: data && data.image
+    };
+    const displayName = String(rawProfile.displayName || '').trim().slice(0, 24);
+    const gender = rawProfile.gender === 'female' ? 'female' : (rawProfile.gender === 'male' ? 'male' : '');
+    const age = safety.parseAge(rawProfile.age);
+    const country = String(rawProfile.country || '').trim();
+    const city = String(rawProfile.city || '').trim();
+    if (!displayName) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Please choose a display name.' });
+      return;
+    }
+    if (!gender) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Please choose male or female.' });
+      return;
+    }
+    if (!safety.isValidAge(age)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Age must be 18–99.' });
+      return;
+    }
+    if (!isValidLocation(country, city)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'Please pick a valid country and city from the list.' });
+      return;
+    }
+    const nameCheck = safety.validateUsername(displayName);
+    if (!nameCheck.ok) {
+      if (typeof ack === 'function') ack({ ok: false, message: nameCheck.message || 'Invalid display name.' });
+      return;
+    }
+    const result = await accounts.register(data && data.email, data && data.password, {
+      displayName: nameCheck.text,
+      gender,
+      age,
+      country,
+      city,
+      interests: Array.isArray(rawProfile.interests) ? rawProfile.interests : [],
+      image: rawProfile.image || null
+    });
     if (typeof ack === 'function') ack(result);
     else socket.emit('account-result', { action: 'register', ...result });
+  });
+
+  socket.on('account-password-reset-request', async (data, ack) => {
+    const rl = features.rateLimit('reset:' + (socket.handshake.address || socket.id), 10, 15 * 60 * 1000);
+    if (!rl.ok) {
+      if (typeof ack === 'function') ack(rl);
+      return;
+    }
+    const result = await accounts.requestPasswordReset(data && data.email);
+    if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-password-reset', (data, ack) => {
+    const result = accounts.resetPassword(data && data.email, data && data.code, data && data.password);
+    if (typeof ack === 'function') ack(result);
   });
 
   socket.on('account-verify', (data, ack) => {
@@ -1032,6 +1477,8 @@ io.on('connection', (socket) => {
       bindAccountToSocket(data.email);
       accounts.touchLastLogin(data.email);
       io.emit('members-changed');
+      broadcastOnlineUsers();
+      broadcastStats();
     }
     if (typeof ack === 'function') ack(result);
     else socket.emit('account-result', { action: 'verify', ...result });
@@ -1046,6 +1493,9 @@ io.on('connection', (socket) => {
     const result = await accounts.login(data && data.email, data && data.password);
     if (result.ok) {
       bindAccountToSocket(data.email);
+      io.emit('members-changed');
+      broadcastOnlineUsers();
+      broadcastStats();
     }
     if (typeof ack === 'function') ack(result);
     else socket.emit('account-result', { action: 'login', ...result });
@@ -1057,6 +1507,8 @@ io.on('connection', (socket) => {
       bindAccountToSocket(result.account.email);
       accounts.touchLastSeen(result.account.email);
       result.unread = inbox.unreadCount(result.account.email);
+      broadcastOnlineUsers();
+      broadcastStats();
     }
     if (typeof ack === 'function') ack(result);
   });
@@ -1064,6 +1516,16 @@ io.on('connection', (socket) => {
   socket.on('account-resend-code', async (data, ack) => {
     const result = await accounts.resendCode(data && data.email);
     if (typeof ack === 'function') ack(result);
+  });
+
+  socket.on('account-unbind-tab', (data, ack) => {
+    const token = sessionTokenOfSocket();
+    accounts.unbindSession(token);
+    socket.accountEmail = null;
+    broadcastOnlineUsers();
+    broadcastStats();
+    io.emit('members-changed');
+    if (typeof ack === 'function') ack({ ok: true });
   });
 
   socket.on('account-logout', (data, ack) => {
@@ -1074,6 +1536,9 @@ io.on('connection', (socket) => {
     if (data && data.authToken) accounts.revokeAuthToken(data.authToken);
     else if (email) accounts.revokeAuthTokensForEmail(email);
     socket.accountEmail = null;
+    io.emit('members-changed');
+    broadcastOnlineUsers();
+    broadcastStats();
     if (typeof ack === 'function') ack({ ok: true });
   });
 
@@ -1205,6 +1670,7 @@ io.on('connection', (socket) => {
     const result = accounts.updateMemberProfile(me.token, patch);
     if (result.ok) {
       io.emit('members-changed');
+      broadcastOnlineUsers();
     }
     if (typeof ack === 'function') ack(result);
   });
@@ -1348,12 +1814,14 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack(result);
       return;
     }
+    noteStealthReveal(socket, partner);
 
     const liveCount = emitToEmail(partner, 'inbox-new', {
       threadId: result.threadId,
       message: { ...result.message, fromSelf: false },
       from: me.email,
       fromName,
+      fromPublicId: accounts.publicIdOf(me.email),
       unread: inbox.unreadCount(partner)
     });
     if (liveCount > 0) {
@@ -1600,6 +2068,30 @@ io.on('connection', (socket) => {
     broadcastStats();
     socket.emit('logged-out', { ok: true });
     if (typeof ack === 'function') ack({ ok: true });
+  });
+
+  socket.on('set-hidden-mode', (data, ack) => {
+    const tok = resolveSessionTokenForSocket(socket);
+    const sess = tok ? sessions.get(tok) : null;
+    if (!sess) {
+      socket.stealth = !!(data && data.hidden);
+      if (typeof ack === 'function') ack({ ok: true, hidden: !!socket.stealth, pending: true });
+      return;
+    }
+    sess.stealth = !!(data && data.hidden);
+    socket.stealth = sess.stealth;
+    if (!sess.revealedTo) sess.revealedTo = new Set();
+    broadcastOnlineUsers();
+    broadcastStats();
+    if (typeof ack === 'function') ack({ ok: true, hidden: sess.stealth });
+  });
+
+  socket.on('browse-leave', () => {
+    const token = resolveSessionTokenForSocket(socket);
+    const sess = token ? sessions.get(token) : null;
+    if (sess) sess.browseHidden = true;
+    broadcastOnlineUsers();
+    broadcastStats();
   });
 
   socket.on('disconnect', (reason) => {

@@ -23,6 +23,8 @@ const accounts = new Map();
 const pendingSignups = new Map();
 /** sessionToken -> email */
 const sessionAccount = new Map();
+/** email -> { code, expiresAt } */
+const pendingResets = new Map();
 /** authToken -> { email, expiresAt } */
 const authTokens = new Map();
 
@@ -48,8 +50,22 @@ function newAuthToken() {
   return crypto.randomBytes(24).toString('hex');
 }
 
+function isSyntheticEmail(email) {
+  const e = String(email || '').trim().toLowerCase();
+  return (
+    e.endsWith('@example.com') ||
+    e.endsWith('@example.org') ||
+    e.endsWith('@example.net') ||
+    e.endsWith('.test')
+  );
+}
+
 function isActive(acc) {
   return !!(acc && acc.verified);
+}
+
+function isListedMember(acc) {
+  return isActive(acc) && !isSyntheticEmail(acc.email);
 }
 
 function loadJson(file, fallback) {
@@ -206,6 +222,7 @@ function profileFields(acc) {
   return {
     publicId: publicIdOf(acc.email),
     gender: acc.gender || null,
+    age: acc.age || null,
     country: acc.country || null,
     city: acc.city || null,
     interests: Array.isArray(acc.interests) ? acc.interests.slice(0, 5) : [],
@@ -264,6 +281,13 @@ function updateMemberProfile(sessionToken, patch) {
     }
     acc.gender = patch.gender;
   }
+  if (patch.age !== undefined) {
+    const n = parseInt(patch.age, 10);
+    if (!Number.isFinite(n) || n < 18 || n > 99) {
+      return { ok: false, message: 'Age must be 18–99.' };
+    }
+    acc.age = n;
+  }
   if (patch.country !== undefined) acc.country = patch.country ? String(patch.country).trim().slice(0, 80) : null;
   if (patch.city !== undefined) acc.city = patch.city ? String(patch.city).trim().slice(0, 80) : null;
   if (patch.interests !== undefined) {
@@ -283,10 +307,18 @@ function updateMemberProfile(sessionToken, patch) {
   return { ok: true, account: publicAccount(acc) };
 }
 
+function listActiveAccounts() {
+  const out = [];
+  for (const acc of accounts.values()) {
+    if (isListedMember(acc)) out.push(acc);
+  }
+  return out;
+}
+
 function listPublicMembers(isEmailOnline) {
   const users = [];
   for (const acc of accounts.values()) {
-    if (!isActive(acc)) continue;
+    if (!isListedMember(acc)) continue;
     const presence = typeof isEmailOnline === 'function' ? isEmailOnline(acc.email) : null;
     users.push({
       id: publicIdOf(acc.email),
@@ -368,7 +400,7 @@ async function deliverCode(email, code) {
   };
 }
 
-async function register(email, password) {
+async function register(email, password, profile) {
   email = String(email || '').trim().toLowerCase();
   password = String(password || '');
   if (!isValidEmail(email)) {
@@ -388,6 +420,7 @@ async function register(email, password) {
 
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = hashPassword(password, salt);
+  const p = profile && typeof profile === 'object' ? profile : {};
   pendingSignups.set(email, {
     email,
     passwordHash,
@@ -395,8 +428,14 @@ async function register(email, password) {
     code: issued.code,
     expiresAt: issued.expiresAt,
     createdAt: Date.now(),
-    // If they already had an unverified leftover account, keep friends
-    friends: existing && existing.friends ? existing.friends : []
+    friends: existing && existing.friends ? existing.friends : [],
+    displayName: p.displayName || null,
+    gender: p.gender || null,
+    age: p.age || null,
+    country: p.country || null,
+    city: p.city || null,
+    interests: Array.isArray(p.interests) ? p.interests.slice(0, 5) : [],
+    image: p.image || null
   });
   savePending();
 
@@ -434,12 +473,13 @@ function verify(email, code) {
     incomingRequests: leftover && leftover.incomingRequests ? leftover.incomingRequests : [],
     outgoingRequests: leftover && leftover.outgoingRequests ? leftover.outgoingRequests : [],
     blocked: leftover && leftover.blocked ? leftover.blocked : [],
-    displayName: leftover && leftover.displayName ? leftover.displayName : email.split('@')[0],
-    gender: leftover && leftover.gender ? leftover.gender : null,
-    country: leftover && leftover.country ? leftover.country : null,
-    city: leftover && leftover.city ? leftover.city : null,
-    interests: leftover && leftover.interests ? leftover.interests : [],
-    image: leftover && leftover.image ? leftover.image : null,
+    displayName: pending.displayName || (leftover && leftover.displayName) || email.split('@')[0],
+    gender: pending.gender || (leftover && leftover.gender) || null,
+    age: pending.age || (leftover && leftover.age) || null,
+    country: pending.country || (leftover && leftover.country) || null,
+    city: pending.city || (leftover && leftover.city) || null,
+    interests: pending.interests || (leftover && leftover.interests) || [],
+    image: pending.image || (leftover && leftover.image) || null,
     createdAt: leftover && leftover.createdAt ? leftover.createdAt : now,
     lastLoginAt: now,
     lastSeenAt: now
@@ -538,6 +578,64 @@ async function resendCode(email) {
   return { ok: true, message: delivered.message, devCode: delivered.devCode };
 }
 
+async function requestPasswordReset(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (!isValidEmail(email)) {
+    return { ok: false, message: 'Please enter a valid email address.' };
+  }
+  const acc = accounts.get(email);
+  if (!isActive(acc)) {
+    return { ok: false, message: 'That email is not registered. Please create an account first.' };
+  }
+  const issued = await issueCode(email);
+  pendingResets.set(email, { code: issued.code, expiresAt: issued.expiresAt });
+  const send = await mail.sendPasswordResetEmail(email, issued.code);
+  if (send.sent) {
+    return { ok: true, message: 'We sent a 6-digit code to your email. Enter it below to set a new password.' };
+  }
+  if (mail.allowDevCodes()) {
+    console.log(`[accounts] DEV password reset code for ${email}: ${issued.code}`);
+    return {
+      ok: true,
+      devMode: true,
+      devCode: issued.code,
+      message: 'Email is not configured. Dev mode is on — use the demo code shown.'
+    };
+  }
+  pendingResets.delete(email);
+  return { ok: false, message: mail.formatMailError(send.error) };
+}
+
+function resetPassword(email, code, newPassword) {
+  email = String(email || '').trim().toLowerCase();
+  code = String(code || '').trim();
+  newPassword = String(newPassword || '');
+  if (newPassword.length < 6) {
+    return { ok: false, message: 'Password must be at least 6 characters.' };
+  }
+  const pending = pendingResets.get(email);
+  if (!pending) {
+    return { ok: false, message: 'No password reset requested. Ask for a code first.' };
+  }
+  if (!pending.expiresAt || pending.expiresAt < Date.now()) {
+    pendingResets.delete(email);
+    return { ok: false, message: 'Code expired. Request a new one.' };
+  }
+  if (String(pending.code) !== code) {
+    return { ok: false, message: 'Invalid verification code.' };
+  }
+  const acc = accounts.get(email);
+  if (!isActive(acc)) {
+    return { ok: false, message: 'Account not found.' };
+  }
+  acc.salt = crypto.randomBytes(16).toString('hex');
+  acc.passwordHash = hashPassword(newPassword, acc.salt);
+  saveAccounts();
+  pendingResets.delete(email);
+  revokeAuthTokensForEmail(email);
+  return { ok: true, message: 'Password updated. You can log in with your new password.' };
+}
+
 function bindSession(sessionToken, email) {
   if (!sessionToken || !email) return;
   sessionAccount.set(sessionToken, email.toLowerCase());
@@ -598,7 +696,7 @@ function setDisplayName(email, name) {
   if (!acc) return;
   const clean = String(name || '').trim().slice(0, 40);
   if (!clean) return;
-  if (acc.displayName !== clean) {
+  if (!acc.displayName) {
     acc.displayName = clean;
     saveAccounts();
   }
@@ -638,7 +736,7 @@ function sendFriendRequest(requesterToken, targetEmailOrToken, resolveFn) {
   if (!targetEmail) {
     return {
       ok: false,
-      message: 'That person has not linked a verified email account yet. They need to register first.'
+      message: 'You can chat with them, but friends are only for registered members. They need to create an account first.'
     };
   }
   if (targetEmail === reqEmail) {
@@ -892,7 +990,7 @@ function listRegisteredUsers(sessionToken, isEmailOnline) {
   const owner = isOwner(me);
   const users = [];
   for (const acc of accounts.values()) {
-    if (!isActive(acc)) continue;
+    if (!isListedMember(acc)) continue;
     if (!owner && acc.email === me) continue;
     if (!owner && isBlockedAccount(me, acc.email)) continue;
     const p = presencePayload(acc.email, isEmailOnline);
@@ -971,6 +1069,8 @@ module.exports = {
   listFriendRequests,
   listRegisteredUsers,
   listPublicMembers,
+  listActiveAccounts,
+  isSyntheticEmail,
   listAllUsersAdmin,
   reload,
   updateMemberProfile,
@@ -994,6 +1094,8 @@ module.exports = {
   blockAccount,
   unblockAccount,
   listBlockedAccounts,
+  requestPasswordReset,
+  resetPassword,
   emailConfigured: mail.emailConfigured,
   mailStatus: mail.mailStatus
 };

@@ -261,6 +261,23 @@ async function sendVerificationEmail(to, code) {
   return result;
 }
 
+async function sendPasswordResetEmail(to, code) {
+  const subject = 'Your PineappleChat password reset code';
+  const text = `Your PineappleChat password reset code is: ${code}\n\nIt expires in 15 minutes.\nIf you did not request this, ignore this email.`;
+  const html = `
+  <div style="font-family:Inter,Segoe UI,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#fff8e7;border-radius:16px;border:1px solid #f5d76e">
+    <div style="font-size:22px;font-weight:700;color:#2d5a27">🍍 PineappleChat</div>
+    <p style="color:#3f3a32;font-size:15px">Your password reset code is:</p>
+    <p style="font-size:32px;font-weight:700;letter-spacing:8px;color:#2d5a27;margin:16px 0">${code}</p>
+    <p style="color:#6b6458;font-size:13px">It expires in 15 minutes. If you did not ask to reset your password, ignore this email.</p>
+  </div>`;
+  const result = await sendEmail({ to, subject, text, html });
+  if (!result.sent) {
+    console.log(`[mail] password reset code for ${to}: ${code} (not emailed: ${result.error})`);
+  }
+  return result;
+}
+
 async function sendInboxNotification(to, fromName, preview) {
   const subject = `New PineappleChat message from ${fromName || 'someone'}`;
   const text = `${fromName || 'Someone'} sent you a message on PineappleChat:\n\n${String(preview || '').slice(0, 200)}\n\nLog in at https://pineapplechat.com and open Inbox to reply.`;
@@ -270,6 +287,7 @@ async function sendInboxNotification(to, fromName, preview) {
 
 module.exports = {
   sendVerificationEmail,
+  sendPasswordResetEmail,
   sendInboxNotification,
   emailConfigured,
   allowDevCodes,

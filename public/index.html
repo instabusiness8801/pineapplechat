@@ -605,7 +605,7 @@
       min-width: 0;
     }
     #start-online-list {
-      max-height: 220px;
+      max-height: 320px;
     }
     #start-members-grid {
       display: grid;
@@ -641,6 +641,95 @@
       object-fit: cover;
       flex-shrink: 0;
       background: #eee;
+    }
+    .people-member-badge {
+      font-size: 9px;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: var(--chip-green, #E8F5E9);
+      color: #2A3D2A;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    html[data-theme="dark"] .people-member-badge {
+      background: #2A3D30;
+      color: #cfe8d2;
+    }
+    .people-avatar-wrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+    .people-avatar {
+      display: block;
+      object-fit: cover;
+      background: #eee;
+    }
+    .people-avatar-md {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+    }
+    .people-avatar-sm {
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+    }
+    .people-avatar-fallback {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      font-size: 1rem;
+    }
+    .people-avatar-md.people-avatar-fallback { font-size: 1.15rem; }
+    .people-online-dot,
+    .people-away-dot {
+      position: absolute;
+      right: -2px;
+      bottom: -2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 2px solid var(--surface, #fff);
+      box-sizing: border-box;
+    }
+    .people-online-dot { background: #22c55e; }
+    .people-away-dot { background: #f59e0b; }
+    .people-away-badge {
+      font-size: 9px;
+      line-height: 1;
+      padding: 2px 5px;
+      border-radius: 999px;
+      background: #FEF3C7;
+      color: #92400e;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    html[data-theme="dark"] .people-away-badge {
+      background: #4A3F28;
+      color: #F5D76E;
+    }
+    .people-row-away {
+      opacity: 0.78;
+    }
+    #hidden-mode-btn.is-hidden-on,
+    #hidden-mode-btn-start.is-hidden-on {
+      background: #3f3a32;
+      color: #fff;
+      border-color: #3f3a32 !important;
+    }
+    .people-row {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      padding: 0.5rem 0.6rem;
+      border-radius: 0.75rem;
+      cursor: pointer;
+    }
+    .people-row-member {
+      padding: 0.55rem 0.65rem;
     }
     .acct-avatar-btn.is-selected {
       outline: 2px solid var(--pine-leaf, #2d8a4e);
@@ -725,8 +814,8 @@
     }
     @media (min-width: 768px) {
       #hub-users-pane {
-        width: 16rem;
-        flex: 0 0 16rem;
+        width: 20rem;
+        flex: 0 0 20rem;
         display: flex !important;
       }
       #hub-chat-pane {
@@ -737,8 +826,8 @@
     }
     @media (min-width: 1024px) {
       #hub-users-pane {
-        width: 18rem;
-        flex: 0 0 18rem;
+        width: 22rem;
+        flex: 0 0 22rem;
       }
     }
 
@@ -778,6 +867,47 @@
         font-weight: 600;
         color: var(--pine-leaf);
       }
+      #stats {
+        display: none !important;
+      }
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+      max-width: 80rem;
+      margin: 0 auto;
+      padding: 0.5rem 0.75rem;
+      min-height: 3.5rem;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex: 0 0 auto;
+      min-width: 0;
+    }
+    .nav-brand .logo-word {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: nowrap;
+    }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.5rem;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+    #stats {
+      flex: 0 0 auto;
+    }
+    @media (max-width: 767px) {
+      .logo-word { font-size: 1.05rem; }
     }
 
     /* Filter bar wraps cleanly */
@@ -858,6 +988,18 @@
     #inbox-modal:not(.hidden),
     #settings-modal:not(.hidden) {
       display: flex !important;
+      overflow-y: auto;
+      align-items: flex-start;
+      -webkit-overflow-scrolling: touch;
+    }
+    #account-modal > div,
+    #report-modal > div,
+    #settings-modal > div {
+      margin-top: auto;
+      margin-bottom: auto;
+      position: relative;
+      z-index: 1;
+      pointer-events: auto;
     }
     .acct-tab.is-active-acct {
       background: var(--pine-leaf, #2d8a4e);
@@ -977,17 +1119,17 @@
   <!-- Top Nav -->
   <nav class="theme-nav border-b sticky top-0 z-50 shadow-sm backdrop-blur-lg">
     <div class="pineapple-bar"></div>
-    <div class="max-w-4xl mx-auto px-3 sm:px-4 h-14 sm:h-16 flex items-center justify-between gap-2">
-      <div class="flex items-center gap-x-2 sm:gap-x-3 min-w-0">
+    <div class="nav-inner">
+      <div class="nav-brand">
         <div class="w-8 h-8 sm:w-9 sm:h-9 logo-icon rounded-xl flex items-center justify-center shadow-md flex-shrink-0" title="PineappleChat">
           <span class="text-base sm:text-lg leading-none" aria-hidden="true">🍍</span>
         </div>
-        <div class="logo-font logo-word truncate" aria-label="PineappleChat">
+        <div class="logo-font logo-word" aria-label="PineappleChat">
           <span class="logo-pine">Pineapple</span><span class="logo-chat">Chat</span>
         </div>
       </div>
       
-      <div class="flex items-center gap-x-2 sm:gap-x-4 text-sm flex-shrink-0">
+      <div class="nav-actions text-sm">
         <div id="stats-mobile" title="People online">
           <span class="w-1.5 h-1.5 rounded-full status-dot inline-block" style="background:var(--pine-leaf)"></span>
           <span id="online-count-mobile">0</span>
@@ -999,8 +1141,10 @@
             <span id="online-count" class="font-medium" style="color:var(--pine-leaf)">0</span>
             <span class="theme-muted">online</span>
           </div>
-          <div class="w-px h-3 theme-surface-2"></div>
-          <span id="chatting-count" class="font-medium theme-muted">0 chatting</span>
+          <span class="hidden md:inline-flex items-center gap-x-2">
+            <span class="w-px h-3 theme-surface-2 inline-block"></span>
+            <span id="chatting-count" class="font-medium theme-muted">0 chatting</span>
+          </span>
         </div>
 
         <button type="button" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
@@ -1059,12 +1203,8 @@
     <!-- PROFILE / START SCREEN: form first on mobile, side-by-side on desktop -->
     <div id="start-screen" class="screen max-w-6xl mx-auto">
 
-      <section id="start-members-section" class="surface-card card-teal rounded-2xl sm:rounded-3xl p-3 sm:p-4">
-        <div class="flex items-center justify-between mb-2 gap-2">
-          <h3 class="font-semibold text-sm theme-text-strong">Registered members</h3>
-          <span id="start-members-count" class="text-[10px] px-2 py-0.5 rounded-full chip-green font-medium">0</span>
-        </div>
-        <p class="text-[10px] theme-muted mb-2">Browse members even if nobody is in quick chat. Register or log in to message them.</p>
+      <section id="start-members-section" class="hidden" aria-hidden="true">
+        <span id="start-members-count">0</span>
         <div id="start-members-grid"></div>
       </section>
 
@@ -1073,19 +1213,30 @@
       <div class="start-online-col">
         <div class="surface-card card-teal rounded-2xl sm:rounded-3xl p-3 sm:p-4">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold text-sm theme-text-strong">Who's online</h3>
+            <h3 class="font-semibold text-sm theme-text-strong">People</h3>
             <span id="online-list-badge" class="text-[10px] px-2 py-0.5 rounded-full chip-green font-medium">Live</span>
           </div>
           <div id="start-online-list" class="space-y-1.5 text-xs overflow-auto">
             <!-- populated by JS -->
           </div>
-          <p class="text-[9px] text-gray-500 mt-2">Fill your details below, then tap a user to chat.</p>
+          <p class="text-[9px] text-gray-500 mt-2">Guests and members can chat in the same window when they are online. Friends require both people to be registered. Register to message members who are offline.</p>
+          <div id="tab-identity-bar" class="hidden mt-2 text-[11px] rounded-lg border theme-border px-2 py-1.5">
+            <div id="tab-identity-text" class="theme-text"></div>
+            <button type="button" id="use-as-guest-btn" class="mt-1 text-[11px] px-2 py-1 rounded-lg border theme-border theme-text hover:bg-amber-50">Use this tab as guest</button>
+          </div>
         </div>
       </div>
 
       <!-- Profile form card -->
       <div class="start-form-col">
-        <div class="surface-card card-yellow profile-card">
+        <div id="signed-in-chat-card" class="hidden surface-card card-yellow profile-card p-5">
+          <h3 class="font-semibold theme-text-strong mb-1">You're signed in</h3>
+          <p class="text-sm theme-text mb-2">Tap anyone in <strong>People</strong> to start chatting. You don't need this form again.</p>
+          <p id="signed-in-chat-name" class="text-xs theme-muted"></p>
+          <button type="button" id="hidden-mode-btn-start" class="mt-3 text-xs px-3 py-1.5 rounded-lg border theme-border">Hidden</button>
+          <p class="text-[10px] theme-muted mt-1">Hidden: others cannot see you until you send them a message.</p>
+        </div>
+        <div id="guest-profile-card" class="surface-card card-yellow profile-card">
           <form id="profile-form" class="space-y-5">
             <!-- Username -->
             <div>
@@ -1263,6 +1414,7 @@
             <p class="text-center text-[10px] theme-muted">Be respectful. Report or block unsafe behaviour. 18+ only.</p>
           </form>
         </div>
+        </div>
       </div>
       </div>
 
@@ -1270,6 +1422,13 @@
 
     <!-- MULTI-CHAT HUB: Filters + List + Chat (responsive) -->
     <div id="chat-hub" class="screen max-w-7xl mx-auto hidden">
+      <div id="you-bar" class="mb-2 px-3 py-1.5 rounded-xl border theme-border theme-surface flex items-center justify-between gap-2">
+        <div class="text-xs min-w-0">
+          <span class="theme-muted">You are chatting as</span>
+          <strong id="you-bar-name" class="theme-text-strong ml-1">Guest</strong>
+        </div>
+        <span id="you-bar-hidden" class="hidden text-[10px] px-2 py-0.5 rounded-full" style="background:#3f3a32;color:#fff">Hidden</span>
+      </div>
       <!-- Filters -->
       <div class="hub-filters mb-3 surface-card card-blue rounded-2xl p-3">
         <div class="hub-filters-inner">
@@ -1323,11 +1482,12 @@
         <!-- Online users pane -->
         <div id="hub-users-pane" class="surface-card card-green rounded-2xl flex flex-col overflow-hidden min-h-0">
           <div class="p-3 border-b theme-border flex items-center justify-between theme-surface flex-shrink-0">
-            <div>
-              <div class="font-semibold text-sm theme-text-strong">Online</div>
-              <div id="sidebar-count" class="text-[10px] theme-muted">0 online</div>
+            <div class="min-w-0">
+              <div class="font-semibold text-sm theme-text-strong">People</div>
+              <div id="sidebar-count" class="text-[10px] theme-muted">0 people</div>
+              <div class="text-[10px] theme-muted truncate">You: <span id="you-bar-name-list" class="font-semibold theme-text-strong">Guest</span></div>
             </div>
-            <span class="text-[10px] theme-muted md:hidden">Tap someone to chat</span>
+            <button type="button" id="hidden-mode-btn" title="Hide from People until you message someone" class="text-[10px] px-2 py-1 rounded-lg border theme-border min-h-[32px]">Hidden</button>
           </div>
           <div id="sidebar-online-list" class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5 text-sm theme-surface">
             <!-- populated by renderSidebarUsers -->
@@ -1354,7 +1514,7 @@
                   <i class="fa-solid fa-door-open"></i>
                   <span class="hidden sm:inline text-[10px]">Leave</span>
                 </button>
-                <button type="button" id="add-friend-btn" title="Send friend request (requires email registration)" class="text-xs px-2 py-1.5 text-emerald-600 hover:bg-emerald-50 rounded flex items-center gap-1 min-h-[36px]">
+                <button type="button" id="add-friend-btn" title="Friend request — both of you must be registered" class="text-xs px-2 py-1.5 text-emerald-600 hover:bg-emerald-50 rounded flex items-center gap-1 min-h-[36px]">
                   <i class="fa-solid fa-user-plus"></i>
                   <span class="hidden sm:inline text-[10px]">Friend</span>
                 </button>
@@ -1425,35 +1585,54 @@
   </div>
 
   <!-- Account / Friends modal -->
-  <div id="account-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
+  <div id="account-modal" class="fixed inset-0 z-[400] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
     <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold theme-text-strong">Account &amp; Friends</h2>
         <button type="button" id="account-modal-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
       </div>
-      <p class="text-[11px] theme-muted mb-3">Register with email + password. We email a 6-digit code — confirm it to create your account, then use Friends, Members, and Inbox.</p>
+      <p class="text-[11px] theme-muted mb-3">Register with your profile + email. We send a 6-digit code — after you confirm, you can tap people and chat without filling the start form again.</p>
 
       <div id="account-logged-out" class="space-y-3">
-        <div class="flex gap-2 text-xs mb-2">
+        <div class="flex gap-1 text-xs mb-2">
           <button type="button" data-auth-tab="register" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border is-active-auth">Register</button>
           <button type="button" data-auth-tab="login" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Login</button>
-          <button type="button" data-auth-tab="verify" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Verify code</button>
+          <button type="button" data-auth-tab="verify" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Verify</button>
+          <button type="button" data-auth-tab="reset" class="auth-tab flex-1 py-1.5 rounded-lg border theme-border">Reset</button>
         </div>
         <form id="auth-panel-register" class="auth-panel space-y-2">
-          <input id="reg-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="email">
-          <input id="reg-password" type="password" placeholder="Password (min 6)" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="new-password">
+          <input id="reg-display-name" type="text" maxlength="24" placeholder="Display name *" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="nickname">
+          <div class="flex gap-2 text-xs">
+            <label class="flex-1 border theme-border rounded-xl px-3 py-2"><input type="radio" name="reg-gender" value="male" class="mr-1"> Male</label>
+            <label class="flex-1 border theme-border rounded-xl px-3 py-2"><input type="radio" name="reg-gender" value="female" class="mr-1"> Female</label>
+          </div>
+          <input id="reg-age" type="text" inputmode="numeric" maxlength="2" placeholder="Age (18–99) *" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+          <input id="reg-country" type="text" list="country-datalist" placeholder="Country *" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
+          <input id="reg-city" type="text" list="reg-city-datalist" placeholder="City *" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="off">
+          <datalist id="reg-city-datalist"></datalist>
+          <input id="reg-email" type="email" placeholder="Email *" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="email">
+          <input id="reg-password" type="password" placeholder="Password (min 6) *" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="new-password">
           <button type="submit" id="reg-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Create account</button>
         </form>
         <form id="auth-panel-login" class="auth-panel space-y-2 hidden">
           <input id="login-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="username">
           <input id="login-password" type="password" placeholder="Password" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="current-password">
           <button type="submit" id="login-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Log in</button>
+          <button type="button" id="forgot-password-btn" class="w-full text-xs theme-muted py-1">Forgot password?</button>
+        </form>
+        <form id="auth-panel-reset" class="auth-panel space-y-2 hidden">
+          <input id="reset-email" type="email" placeholder="Registered email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="email">
+          <button type="button" id="reset-send-code-btn" class="w-full border theme-border rounded-xl py-2 text-sm">Send reset code</button>
+          <input id="reset-code" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none tracking-widest" autocomplete="one-time-code">
+          <input id="reset-password" type="password" placeholder="New password (min 6)" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="new-password">
+          <input id="reset-password-2" type="password" placeholder="Confirm new password" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="new-password">
+          <button type="submit" id="reset-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Set new password</button>
         </form>
         <form id="auth-panel-verify" class="auth-panel space-y-2 hidden">
           <input id="verify-email" type="email" placeholder="Email" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none" autocomplete="email">
           <input id="verify-code" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none tracking-widest" autocomplete="one-time-code">
-          <button type="submit" id="verify-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Confirm email</button>
-          <button type="button" id="resend-code-btn" class="w-full text-xs theme-muted py-1">Resend code</button>
+          <button type="button" id="verify-submit" class="w-full btn-primary-g py-3 rounded-xl text-sm min-h-[44px] cursor-pointer relative z-10">Confirm email</button>
+          <button type="button" id="resend-code-btn" class="w-full text-xs theme-muted py-2 min-h-[36px]">Resend code</button>
         </form>
         <div id="auth-dev-code" class="hidden text-xs p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800"></div>
         <div id="auth-status" class="text-xs theme-muted"></div>
@@ -1473,7 +1652,7 @@
         <div id="acct-panel-friends" class="acct-panel">
           <div class="text-xs font-semibold theme-text-strong mb-1">Friends <span class="font-normal theme-muted">(online first)</span></div>
           <ul id="friends-list" class="text-xs space-y-1 theme-muted max-h-52 overflow-y-auto"></ul>
-          <p class="text-[10px] theme-muted mt-1">Send a friend request from People, or tap <strong>Friend</strong> in a live chat. Inbox messages stay even if they are offline.</p>
+          <p class="text-[10px] theme-muted mt-1">You can chat with anyone in the list. Friend requests only work when both of you have registered accounts. Inbox messages stay even if they are offline.</p>
         </div>
         <div id="acct-panel-people" class="acct-panel hidden">
           <input id="people-search" type="search" placeholder="Search registered members" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none mb-2">
@@ -1510,6 +1689,7 @@
       <form id="member-profile-form" class="space-y-2">
         <p class="text-[10px] theme-muted">This is what other members see. Pick an avatar or upload a photo.</p>
         <input id="member-display-name" type="text" maxlength="24" placeholder="Display name" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
+        <input id="member-age" type="text" inputmode="numeric" maxlength="2" placeholder="Age (18–99)" class="w-full theme-input border rounded-xl px-3 py-2 text-sm outline-none">
         <div class="flex gap-2">
           <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="male" class="mr-1"> Male</label>
           <label class="flex-1 text-xs"><input type="radio" name="member-gender" value="female" class="mr-1"> Female</label>
@@ -1661,6 +1841,7 @@
     let isMatched = false; // legacy flag kept for minimal compat in a few spots
     let typingTimeout = null;
     let currentProfile = null;
+    let joiningAccountLive = false;
     let partnerProfile = null;
 
     // Online users + filters
@@ -1892,11 +2073,17 @@
 
       currentState = screen;
       if (typeof updateLogoutButtonVisibility === 'function') updateLogoutButtonVisibility();
+      if (typeof updateMyUsernameChip === 'function') updateMyUsernameChip();
     }
 
-    // ---- Session restore (15 minutes; synced from server /api/config when available) ----
+    // ---- Session restore (10 minutes; synced from server /api/config when available) ----
     const SESSION_KEY = 'pineapplechat-session';
-    let SESSION_GRACE_MS = 15 * 60 * 1000;
+    const GUEST_TAB_KEY = 'pineapplechat-guest-tab';
+    const ACCOUNT_TAB_KEY = 'pineapplechat-account-tab';
+    const HIDDEN_KEY = 'pineapplechat-hidden-mode';
+    let hiddenMode = false;
+    try { hiddenMode = sessionStorage.getItem(HIDDEN_KEY) === '1'; } catch (e) { hiddenMode = false; }
+    let SESSION_GRACE_MS = 10 * 60 * 1000;
     let sessionToken = null;
     /** @type {{ msgId: string|null, text: string, username: string }|null} */
     let pendingReply = null;
@@ -1939,6 +2126,22 @@
     /** Dedup ids for pending/live messages after refresh */
     const seenMsgIds = new Set();
 
+    function isGuestTab() {
+      try { return sessionStorage.getItem(GUEST_TAB_KEY) === '1'; } catch (e) { return false; }
+    }
+
+    function setGuestTab(on) {
+      try {
+        if (on) sessionStorage.setItem(GUEST_TAB_KEY, '1');
+        else sessionStorage.removeItem(GUEST_TAB_KEY);
+      } catch (e) { /* ignore */ }
+    }
+
+    function writeTabSession(payload) {
+      try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload)); } catch (e) { /* ignore */ }
+      try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+    }
+
     function saveSession() {
       if (!currentProfile || intentionalLogout) return;
       try {
@@ -1950,18 +2153,27 @@
           activeChatId: activeChatId,
           currentFilters: currentFilters
         };
-        localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+        writeTabSession(payload);
       } catch (e) { /* quota / private mode */ }
     }
 
     function loadSession() {
       try {
-        const raw = localStorage.getItem(SESSION_KEY);
+        let raw = null;
+        try { raw = sessionStorage.getItem(SESSION_KEY); } catch (e) { raw = null; }
+        if (!raw) {
+          try { raw = localStorage.getItem(SESSION_KEY); } catch (e) { raw = null; }
+          if (raw) {
+            try { sessionStorage.setItem(SESSION_KEY, raw); } catch (e) { /* ignore */ }
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+          }
+        }
         if (!raw) return null;
         const data = JSON.parse(raw);
         if (!data || !data.savedAt || !data.profile) return null;
         if (Date.now() - data.savedAt > SESSION_GRACE_MS) {
-          localStorage.removeItem(SESSION_KEY);
+          try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
+          try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
           return null;
         }
         return data;
@@ -1971,6 +2183,7 @@
     }
 
     function clearSession() {
+      try { sessionStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
       try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* ignore */ }
       sessionToken = null;
     }
@@ -2276,21 +2489,30 @@
       const list = users || allOnlineUsers || [];
       const byToken = new Map();
       const byName = new Map();
+      const byMember = new Map();
       list.forEach(u => {
         if (u.sessionToken) byToken.set(u.sessionToken, u);
         if (u.profile && u.profile.username) byName.set(String(u.profile.username).toLowerCase(), u);
+        if (u.memberId) byMember.set(u.memberId, u);
+        if (u.email) byMember.set(String(u.email).toLowerCase(), u);
       });
 
       const next = {};
       Object.keys(chats).forEach(oldId => {
         const c = chats[oldId];
         let match = null;
-        if (c.partnerSessionToken && byToken.has(c.partnerSessionToken)) {
+        let newId = oldId;
+        if (isMemberChatId(oldId) || (c && c.registered)) {
+          const mid = (c && c.memberId) || memberIdFromChatId(oldId);
+          match = (mid && byMember.get(mid)) || (c && c.partnerEmail && byMember.get(String(c.partnerEmail).toLowerCase()));
+          newId = mid ? ('member:' + mid) : oldId;
+        } else if (c.partnerSessionToken && byToken.has(c.partnerSessionToken)) {
           match = byToken.get(c.partnerSessionToken);
+          newId = match && match.registered && match.memberId ? ('member:' + match.memberId) : match.id;
         } else if (c.partnerProfile && c.partnerProfile.username) {
           match = byName.get(String(c.partnerProfile.username).toLowerCase());
+          newId = match ? (match.registered && match.memberId ? ('member:' + match.memberId) : match.id) : oldId;
         }
-        const newId = match ? match.id : oldId;
         if (next[newId] && newId !== oldId) {
           // merge messages
           next[newId].messages = (next[newId].messages || []).concat(c.messages || []);
@@ -2299,6 +2521,11 @@
           if (match) {
             next[newId].partnerProfile = match.profile || c.partnerProfile;
             next[newId].partnerSessionToken = match.sessionToken || c.partnerSessionToken;
+            if (match.registered) {
+              next[newId].registered = true;
+              next[newId].memberId = match.memberId || next[newId].memberId;
+              if (match.email) next[newId].partnerEmail = match.email;
+            }
           }
         }
         if (activeChatId === oldId) activeChatId = newId;
@@ -2436,7 +2663,20 @@
         socket.emit('request-online-users');
         restoreAccountSession();
         loadPublicMembers();
+        if (hiddenMode) socket.emit('set-hidden-mode', { hidden: true });
       });
+
+      if (!window.__pcBrowseLeaveBound) {
+        window.__pcBrowseLeaveBound = true;
+        window.addEventListener('pagehide', () => {
+          if (socket && socket.connected) socket.emit('browse-leave');
+        });
+        window.addEventListener('pageshow', () => {
+          if (!socket || !socket.connected || intentionalLogout) return;
+          if (currentProfile) socket.emit('set-profile', currentProfile);
+          socket.emit('request-online-users');
+        });
+      }
 
       socket.on('disconnect', (reason) => {
         console.log('%c[client] Disconnected', 'color:#b45309', reason);
@@ -2454,6 +2694,7 @@
         socket.emit('request-online-users');
         restoreAccountSession();
         loadPublicMembers();
+        if (hiddenMode) socket.emit('set-hidden-mode', { hidden: true });
       });
 
       socket.on('logged-out', () => {
@@ -2473,7 +2714,6 @@
           const n = chatting ?? 0;
           chattingCountEl.textContent = n === 1 ? '1 chatting' : `${n} chatting`;
         }
-        if (statsEl) statsEl.classList.remove('hidden');
       });
 
       socket.on('online-users', (users) => {
@@ -2486,10 +2726,12 @@
           ...demos,
           ...real.filter(u => {
             if (!u || !u.id || !u.profile) return false;
-            if (demoIds.has(u.id)) return false;
+            if (demoIds.has(u.id) || (u.memberId && demoIds.has('member:' + u.memberId))) return false;
             // Never show ourselves (by live socket id or session token)
+            if (isSelfUser(u)) return false;
             if (myId && u.id === myId) return false;
             if (myToken && u.sessionToken && u.sessionToken === myToken) return false;
+            if (!u.online && !u.away && !isMemberUser(u)) return false;
             return true;
           })
         ];
@@ -2507,11 +2749,17 @@
       socket.on('chat-started', (data) => {
         if (!data || !data.partnerId) return;
         
-        const pid = data.partnerId;
+        const useInboxId = !!(data.registered && data.memberId && myAccount && myAccount.verified);
+        const pid = useInboxId ? ('member:' + data.memberId) : data.partnerId;
         const prof = data.partnerProfile || {};
         const pToken = data.partnerSessionToken || null;
 
         ensureChat(pid, prof, pToken);
+        if (data.registered) {
+          chats[pid].registered = true;
+          chats[pid].memberId = data.memberId || chats[pid].memberId;
+          if (data.email) chats[pid].partnerEmail = data.email;
+        }
 
         // Only add notification if not the one we are currently viewing.
         // Initiator switches locally on click. Receiver gets only notification.
@@ -2549,7 +2797,11 @@
       });
 
       socket.on('chat-error', (data) => {
-        alert(data.message || 'Could not start chat.');
+        if (data && data.code === 'login-required') {
+          requireLoginForMember();
+          return;
+        }
+        alert((data && data.message) || 'Could not start chat.');
       });
 
       socket.on('receive-message', (data) => {
@@ -2675,7 +2927,42 @@
       socket.on('inbox-new', (payload) => {
         if (!payload) return;
         if (payload.unread != null) setInboxUnread(payload.unread);
-        showInboxToast((payload.fromName || 'Someone') + ': ' + String((payload.message && payload.message.text) || 'New message').slice(0, 80), payload.from);
+        const memberId = payload.fromPublicId || null;
+        const chatId = memberId ? ('member:' + memberId) : null;
+        if (chatId) {
+          ensureChat(chatId, { username: payload.fromName || 'Member' });
+          chats[chatId].registered = true;
+          chats[chatId].memberId = memberId;
+          chats[chatId].partnerEmail = payload.from || chats[chatId].partnerEmail;
+          const msg = payload.message || {};
+          const at = msg.at || Date.now();
+          const hubMsg = {
+            text: msg.text,
+            fromSelf: false,
+            time: new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            msgId: msg.id,
+            status: msg.status || 'sent',
+            inbox: true
+          };
+          chats[chatId].messages = chats[chatId].messages || [];
+          if (!chats[chatId].messages.some((m) => m.msgId && m.msgId === hubMsg.msgId)) {
+            chats[chatId].messages.push(hubMsg);
+          }
+          chats[chatId].lastMessageTs = at;
+          chats[chatId].consecutiveSent = 0;
+          if (activeChatId === chatId && currentState === 'hub') {
+            addMessageToChatEl(hubMsg.text, false, hubMsg.time, { msgId: hubMsg.msgId });
+            if (socket) socket.emit('inbox-mark-read', { email: payload.from });
+            updateChatLimitStatus();
+          } else {
+            chats[chatId].unread = (chats[chatId].unread || 0) + 1;
+            showInboxToast((payload.fromName || 'Someone') + ': ' + String(msg.text || 'New message').slice(0, 80), payload.from);
+          }
+          if (currentState === 'hub') renderSidebarUsers();
+          else renderStartOnlineList();
+        } else {
+          showInboxToast((payload.fromName || 'Someone') + ': ' + String((payload.message && payload.message.text) || 'New message').slice(0, 80), payload.from);
+        }
         if (inboxPartnerEmail && payload.from === inboxPartnerEmail) {
           appendInboxMessage(payload.message, false);
           if (socket) socket.emit('inbox-mark-read', { email: payload.from });
@@ -2855,11 +3142,14 @@
 
     function applyLoggedInAccount(account, authToken) {
       if (!account) return;
+      setGuestTab(false);
+      try { sessionStorage.setItem(ACCOUNT_TAB_KEY, '1'); } catch (e) { /* ignore */ }
       myAccount = account;
       if (authToken) saveAuth(authToken, account.email);
       if (account.email) accountEmailCache = account.email;
       updateAccountBtnLabel();
       updateLoggedInChrome();
+      updateTabIdentityBar();
     }
 
     function updateLoggedInChrome() {
@@ -2875,6 +3165,20 @@
       const adminTab = document.getElementById('admin-tab-btn');
       if (adminTab) adminTab.classList.toggle('hidden', !(myAccount && myAccount.isOwner));
       updateLogoutButtonVisibility();
+      const guestCard = document.getElementById('guest-profile-card');
+      const signedInCard = document.getElementById('signed-in-chat-card');
+      if (guestCard) guestCard.classList.toggle('hidden', loggedIn);
+      if (signedInCard) {
+        signedInCard.classList.toggle('hidden', !loggedIn);
+        const nm = document.getElementById('signed-in-chat-name');
+        if (nm) {
+          nm.textContent = loggedIn
+            ? ('People see you as ' + (myAccount.displayName || myAccount.email.split('@')[0]) + '.')
+            : '';
+        }
+      }
+      if (loggedIn) ensureLiveSessionFromAccount();
+      updateMyUsernameChip();
     }
 
     function setInboxUnread(n) {
@@ -2906,6 +3210,16 @@
 
     function restoreAccountSession() {
       if (!socket) return;
+      let thisTabLoggedIn = false;
+      try { thisTabLoggedIn = sessionStorage.getItem(ACCOUNT_TAB_KEY) === '1'; } catch (e) { thisTabLoggedIn = false; }
+      if (isGuestTab() || !thisTabLoggedIn) {
+        socket.emit('account-unbind-tab');
+        myAccount = null;
+        updateAccountBtnLabel();
+        updateLoggedInChrome();
+        updateTabIdentityBar();
+        return;
+      }
       const saved = loadAuth();
       if (!saved || !saved.token) return;
       socket.emit('account-restore', { token: saved.token }, (res) => {
@@ -2917,8 +3231,86 @@
           myAccount = null;
           updateAccountBtnLabel();
           updateLoggedInChrome();
+          updateTabIdentityBar();
         }
       });
+    }
+
+    function updateTabIdentityBar() {
+      const bar = document.getElementById('tab-identity-bar');
+      const text = document.getElementById('tab-identity-text');
+      const btn = document.getElementById('use-as-guest-btn');
+      if (!bar || !text) return;
+      if (myAccount && myAccount.verified && !isGuestTab()) {
+        bar.classList.remove('hidden');
+        text.textContent = 'This tab is signed in as ' + myAccount.email + '. A new window stays a guest unless you log in there, so you can see them in People.';
+        if (btn) btn.classList.remove('hidden');
+      } else if (isGuestTab()) {
+        bar.classList.remove('hidden');
+        text.textContent = 'This tab is a guest. The other window can stay logged in as admin.';
+        if (btn) btn.classList.add('hidden');
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
+
+    function loadHiddenMode() {
+      try { hiddenMode = sessionStorage.getItem(HIDDEN_KEY) === '1'; } catch (e) { hiddenMode = false; }
+    }
+    function saveHiddenMode() {
+      try {
+        if (hiddenMode) sessionStorage.setItem(HIDDEN_KEY, '1');
+        else sessionStorage.removeItem(HIDDEN_KEY);
+      } catch (e) { /* ignore */ }
+    }
+    function myVisibleUsername() {
+      if (currentProfile && currentProfile.username) return String(currentProfile.username);
+      if (myAccount && myAccount.displayName) return String(myAccount.displayName);
+      if (myAccount && myAccount.email) return String(myAccount.email).split('@')[0];
+      return 'Guest';
+    }
+    function updateMyUsernameChip() {
+      const name = myVisibleUsername();
+      const a = document.getElementById('you-bar-name');
+      const b = document.getElementById('you-bar-name-list');
+      if (a) a.textContent = name;
+      if (b) b.textContent = name;
+      const hid = document.getElementById('you-bar-hidden');
+      if (hid) hid.classList.toggle('hidden', !hiddenMode);
+    }
+    function syncHiddenModeButtons() {
+      ['hidden-mode-btn', 'hidden-mode-btn-start'].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.classList.toggle('is-hidden-on', !!hiddenMode);
+        btn.textContent = hiddenMode ? 'Hidden on' : 'Hidden';
+        btn.title = hiddenMode
+          ? 'You are hidden. Others see you only after you message them.'
+          : 'Hide from People until you send someone a message.';
+      });
+    }
+    function applyHiddenMode(on) {
+      hiddenMode = !!on;
+      saveHiddenMode();
+      syncHiddenModeButtons();
+      updateMyUsernameChip();
+      if (socket && socket.connected) {
+        socket.emit('set-hidden-mode', { hidden: hiddenMode });
+      }
+    }
+    function toggleHiddenMode() {
+      applyHiddenMode(!hiddenMode);
+    }
+
+    function useThisTabAsGuest() {
+      setGuestTab(true);
+      try { sessionStorage.removeItem(ACCOUNT_TAB_KEY); } catch (e) { /* ignore */ }
+      myAccount = null;
+      if (socket) socket.emit('account-unbind-tab');
+      updateAccountBtnLabel();
+      updateLoggedInChrome();
+      updateTabIdentityBar();
+      if (socket) socket.emit('request-online-users');
     }
 
     function updateAccountBtnLabel() {
@@ -2938,15 +3330,308 @@
       return item.displayName || item.username || item.email || 'User';
     }
 
+    function isMemberChatId(id) {
+      return typeof id === 'string' && id.indexOf('member:') === 0;
+    }
+
+    function memberIdFromChatId(id) {
+      return isMemberChatId(id) ? id.slice(7) : '';
+    }
+
+    function chatIdForUser(user) {
+      if (!user) return '';
+      if (user.registered && (user.memberId || user.email)) {
+        return 'member:' + (user.memberId || '');
+      }
+      if (user.memberId && isMemberChatId(user.id)) return user.id;
+      return user.id || '';
+    }
+
+    function isMemberUser(user) {
+      return !!(user && (user.registered || user.memberId || isMemberChatId(user.id)));
+    }
+
+    function isSelfUser(user) {
+      if (!user) return true;
+      if (socket && (user.id === socket.id || user.socketId === socket.id)) return true;
+      if (sessionToken && user.sessionToken && user.sessionToken === sessionToken) return true;
+      const myEmail = myAccount && myAccount.email ? String(myAccount.email).toLowerCase() : '';
+      if (myEmail && user.email && String(user.email).toLowerCase() === myEmail) return true;
+      const myPid = myAccount && (myAccount.publicId || myAccount.memberId);
+      if (myPid && (user.memberId === myPid || user.id === 'member:' + myPid)) return true;
+      return false;
+    }
+
+    function memberChatMeta(chatId) {
+      const c = chats[chatId];
+      if (!c) return null;
+      return {
+        email: c.partnerEmail || null,
+        memberId: c.memberId || memberIdFromChatId(chatId)
+      };
+    }
+
+    function requireLoginForMember() {
+      openAccountModal();
+      switchAuthTab && switchAuthTab('register');
+      setAuthStatus('Create an account to send messages to registered members.', true);
+    }
+
+    function peoplePhotoUrl(user) {
+      const p = (user && user.profile) || user || {};
+      if (p.image) return p.image;
+      if (user && user.image) return user.image;
+      if (isMemberUser(user)) return defaultMemberAvatar(p.gender || user.gender);
+      return '';
+    }
+
+    function peopleAvatarHtml(user, size) {
+      const cls = size === 'md' ? 'people-avatar people-avatar-md' : 'people-avatar people-avatar-sm';
+      const url = peoplePhotoUrl(user);
+      const img = url
+        ? '<img src="' + escapeHtml(url) + '" class="' + cls + '" alt="">'
+        : '<div class="' + cls + ' people-avatar-fallback"><i class="fa-solid fa-user"></i></div>';
+      const online = !!(user && user.online);
+      const away = !!(user && user.away);
+      const dot = online
+        ? '<span class="people-online-dot" title="Online"></span>'
+        : (away ? '<span class="people-away-dot" title="Away"></span>' : '');
+      return '<div class="people-avatar-wrap">' + img + dot + '</div>';
+    }
+
     function openInboxWith(emailOrId) {
       if (!emailOrId) return;
       if (!myAccount || !myAccount.verified) {
-        openAccountModal();
-        setAuthStatus('Register or log in to message members.', true);
+        requireLoginForMember();
         return;
       }
       closeAccountModal();
-      openInboxModal(emailOrId);
+      closeInboxModal();
+      openMemberHubChat({
+        email: String(emailOrId).indexOf('@') >= 0 ? emailOrId : null,
+        memberId: String(emailOrId).indexOf('@') >= 0 ? null : stripMemberPrefixClient(emailOrId),
+        id: isMemberChatId(emailOrId) ? emailOrId : (String(emailOrId).indexOf('@') >= 0 ? null : 'member:' + emailOrId)
+      });
+    }
+
+    function stripMemberPrefixClient(raw) {
+      const s = String(raw || '').trim();
+      if (s.toLowerCase().indexOf('member:') === 0) return s.slice(7);
+      return s;
+    }
+
+    function promptCompleteProfile(msg) {
+      const firstField = document.getElementById('username');
+      if (firstField) firstField.focus();
+      const hintParent = firstField && firstField.parentNode;
+      if (hintParent && !hintParent.querySelector('.guest-chat-hint')) {
+        const hint = document.createElement('div');
+        hint.className = 'text-[10px] text-blue-600 mt-1 guest-chat-hint';
+        hint.textContent = msg || 'Complete your details below to start chatting.';
+        hintParent.appendChild(hint);
+        setTimeout(() => hint.remove(), 2200);
+      }
+    }
+
+    function ensureLiveSessionFromAccount(done) {
+      if (currentProfile) {
+        if (typeof done === 'function') done();
+        return;
+      }
+      if (!socket || !myAccount || !myAccount.verified) {
+        promptCompleteProfile('Complete your details below, then tap someone to chat.');
+        return;
+      }
+      if (joiningAccountLive) {
+        if (typeof done === 'function') socket.once('profile-accepted', () => done());
+        return;
+      }
+      const p = {
+        username: myAccount.displayName || myAccount.email.split('@')[0],
+        gender: myAccount.gender || 'male',
+        age: myAccount.age || 18,
+        country: myAccount.country || '',
+        city: myAccount.city || '',
+        image: myAccount.image || '',
+        interests: Array.isArray(myAccount.interests) ? myAccount.interests.slice() : [],
+        agreedToTerms: true,
+        fromAccount: true
+      };
+      if (!p.country || !p.city) {
+        promptCompleteProfile('Add country and city in Settings, or fill the form, then tap someone to chat.');
+        return;
+      }
+      joiningAccountLive = true;
+      const onOk = (info) => {
+        joiningAccountLive = false;
+        socket.off('profile-error', onErr);
+        currentProfile = p;
+        if (info && info.sessionToken) {
+          sessionToken = info.sessionToken;
+          currentProfile.sessionToken = info.sessionToken;
+        }
+        if (hiddenMode) socket.emit('set-hidden-mode', { hidden: true });
+        updateMyUsernameChip();
+        if (typeof done === 'function') done();
+      };
+      const onErr = (err) => {
+        joiningAccountLive = false;
+        socket.off('profile-accepted', onOk);
+        alert((err && err.message) || 'Could not join chat.');
+      };
+      socket.once('profile-accepted', onOk);
+      socket.once('profile-error', onErr);
+      socket.emit('set-profile', p);
+    }
+
+    function startLivePeopleChat(user) {
+      const pid = (isMemberChatId(user.id) ? (user.sessionToken || user.id) : user.id);
+      if (!pid || (socket && pid === socket.id)) return;
+      ensureChat(pid, user.profile, user.sessionToken);
+      if (chats[pid]) {
+        chats[pid].unread = 0;
+        if (isMemberUser(user)) {
+          chats[pid].registered = true;
+          chats[pid].memberId = user.memberId || chats[pid].memberId;
+          if (user.email) chats[pid].partnerEmail = user.email;
+        } else {
+          chats[pid].registered = false;
+        }
+      }
+      showScreen('hub');
+      switchToChat(pid);
+      if (socket) {
+        socket.emit('start-chat-with', {
+          targetId: user.id || pid
+        });
+      }
+      renderSidebarUsers();
+    }
+
+    function openPeopleChat(user) {
+      if (!user) return;
+      if (isSelfUser(user)) return;
+      if (String(user.id || '').indexOf('demo-') === 0) {
+        alert('Demo users are for display only. Open another browser/tab, fill the form there, and they will appear as real online users you can chat with.');
+        return;
+      }
+      const go = () => {
+        if (isMemberUser(user) && myAccount && myAccount.verified && !user.online && !user.away) {
+          openMemberHubChat(user);
+          return;
+        }
+        if (!user.online && !user.away) {
+          if (myAccount && myAccount.verified && isMemberUser(user)) {
+            openMemberHubChat(user);
+            return;
+          }
+          alert('They are not in chat right now. Register to send an inbox message they will see later.');
+          return;
+        }
+        startLivePeopleChat(user);
+      };
+      if (currentProfile) {
+        go();
+        return;
+      }
+      if (myAccount && myAccount.verified) {
+        ensureLiveSessionFromAccount(go);
+        return;
+      }
+      promptCompleteProfile('Complete your details below, then tap someone to chat.');
+    }
+
+    function openMemberHubChat(user) {
+      if (isSelfUser(user)) return;
+      if (!myAccount || !myAccount.verified) {
+        requireLoginForMember();
+        return;
+      }
+      const memberId = user.memberId || stripMemberPrefixClient(user.id || user.publicId || '');
+      const chatId = memberId ? ('member:' + memberId) : chatIdForUser(user);
+      if (!chatId || chatId === 'member:') {
+        if (user.email) {
+          ensureChat('member:' + (user.memberId || user.email), user.profile || {
+            username: user.displayName || user.username || 'Member',
+            gender: user.gender,
+            country: user.country,
+            city: user.city,
+            image: user.image,
+            interests: user.interests
+          });
+        } else {
+          return;
+        }
+      }
+      const pid = (memberId ? ('member:' + memberId) : chatId);
+      const profile = user.profile || {
+        username: user.displayName || user.username || 'Member',
+        gender: user.gender || null,
+        age: user.age || null,
+        country: user.country || null,
+        city: user.city || null,
+        location: user.city && user.country ? (user.city + ', ' + user.country) : (user.country || user.city || ''),
+        image: user.image || null,
+        interests: user.interests || []
+      };
+      ensureChat(pid, profile, user.sessionToken || null);
+      chats[pid].registered = true;
+      chats[pid].memberId = memberId || chats[pid].memberId;
+      chats[pid].partnerEmail = user.email || chats[pid].partnerEmail || null;
+      chats[pid].unread = 0;
+      showScreen('hub');
+      switchToChat(pid);
+      if (socket) {
+        socket.emit('start-chat-with', { targetId: pid });
+        loadMemberThreadIntoHub(pid);
+      }
+      renderSidebarUsers();
+    }
+
+    function inboxMsgToHub(msg, myEmail) {
+      if (!msg) return null;
+      const at = msg.at || Date.now();
+      return {
+        text: msg.text,
+        fromSelf: !!(myEmail && msg.from === myEmail) || !!msg.fromSelf,
+        time: new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: 'minute'.length ? '2-digit' : '2-digit' }),
+        msgId: msg.id || msg.msgId,
+        status: msg.status || 'sent',
+        inbox: true
+      };
+    }
+
+    function loadMemberThreadIntoHub(chatId) {
+      if (!socket || !chatId) return;
+      const c = chats[chatId];
+      const email = (c && c.partnerEmail) || null;
+      const target = email || chatId;
+      socket.emit('inbox-open', { email: target }, (res) => {
+        if (!res || !res.ok) return;
+        ensureChat(chatId, {
+          username: res.partnerDisplay || (c && c.partnerProfile && c.partnerProfile.username) || 'Member'
+        });
+        chats[chatId].registered = true;
+        chats[chatId].partnerEmail = res.partner || email || chats[chatId].partnerEmail;
+        chats[chatId].inboxLimit = res.limit || null;
+        chats[chatId].consecutiveSent = (res.limit && !res.limit.unlimited) ? (res.limit.used || 0) : 0;
+        const myEmail = myAccount && myAccount.email;
+        chats[chatId].messages = (res.messages || []).map((m) => {
+          const at = m.at || Date.now();
+          return {
+            text: m.text,
+            fromSelf: !!(myEmail && m.from === myEmail),
+            time: new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            msgId: m.id,
+            status: m.status || 'sent',
+            inbox: true
+          };
+        });
+        chats[chatId].unread = 0;
+        if (activeChatId === chatId) switchToChat(chatId);
+        else renderSidebarUsers();
+        updateChatLimitStatus();
+      });
     }
 
     const MEMBER_INTEREST_TAGS = [
@@ -3029,6 +3714,8 @@
       memberInterestsDraft = Array.isArray(myAccount.interests) ? myAccount.interests.slice() : [];
       const nameEl = document.getElementById('member-display-name');
       if (nameEl) nameEl.value = myAccount.displayName || (myAccount.email && myAccount.email.split('@')[0]) || '';
+      const ageEl = document.getElementById('member-age');
+      if (ageEl) ageEl.value = myAccount.age != null ? String(myAccount.age) : '';
       document.querySelectorAll('input[name="member-gender"]').forEach((r) => {
         r.checked = r.value === myAccount.gender;
       });
@@ -3116,6 +3803,7 @@
         const payload = {
           displayName: (document.getElementById('member-display-name') || {}).value,
           gender: genderEl ? genderEl.value : null,
+          age: (document.getElementById('member-age') || {}).value,
           country: (document.getElementById('member-country') || {}).value,
           city: (document.getElementById('member-city') || {}).value,
           interests: memberInterestsDraft.slice(),
@@ -3515,21 +4203,17 @@
 
     function showAuthDevCode(code) {
       const box = document.getElementById('auth-dev-code');
+      const digits = String(code || '').replace(/\D/g, '').slice(0, 6);
       if (!box) return;
-      if (!code) {
+      if (!digits) {
         box.classList.add('hidden');
         box.textContent = '';
         return;
       }
       box.classList.remove('hidden');
-      box.textContent = 'Demo verification code: ' + code + ' (email provider not configured on this server — enter this code under Verify)';
-    }
-
-    function setAuthStatus(msg, isError) {
-      const el = document.getElementById('auth-status');
-      if (!el) return;
-      el.textContent = msg || '';
-      el.style.color = isError ? '#dc2626' : '';
+      box.textContent = 'Demo verification code: ' + digits + ' — it is filled in below. Tap Confirm email.';
+      const codeEl = document.getElementById('verify-code');
+      if (codeEl && !String(codeEl.value || '').trim()) codeEl.value = digits;
     }
 
     function switchAuthTab(tab) {
@@ -3539,6 +4223,19 @@
       document.querySelectorAll('.auth-panel').forEach((p) => p.classList.add('hidden'));
       const panel = document.getElementById('auth-panel-' + tab);
       if (panel) panel.classList.remove('hidden');
+      if (tab === 'verify') {
+        setTimeout(() => {
+          const codeEl = document.getElementById('verify-code');
+          if (codeEl) codeEl.focus();
+        }, 50);
+      }
+    }
+
+    function setAuthStatus(msg, isError) {
+      const el = document.getElementById('auth-status');
+      if (!el) return;
+      el.textContent = msg || '';
+      el.style.color = isError ? '#dc2626' : '';
     }
 
     function setupAccountModal() {
@@ -3563,8 +4260,13 @@
           if (e) e.preventDefault();
           const email = (document.getElementById('reg-email') || {}).value;
           const password = (document.getElementById('reg-password') || {}).value;
-          if (!email || !password) {
-            setAuthStatus('Enter email and password first.', true);
+          const displayName = (document.getElementById('reg-display-name') || {}).value;
+          const genderEl = document.querySelector('input[name="reg-gender"]:checked');
+          const age = (document.getElementById('reg-age') || {}).value;
+          const country = (document.getElementById('reg-country') || {}).value;
+          const city = (document.getElementById('reg-city') || {}).value;
+          if (!displayName || !genderEl || !age || !country || !city || !email || !password) {
+            setAuthStatus('Fill display name, gender, age, country, city, email, and password.', true);
             return;
           }
           regSubmit.disabled = true;
@@ -3590,7 +4292,15 @@
             switchAuthTab('verify');
           };
           if (!socket) connectSocket();
-          const send = () => socket.emit('account-register', { email, password }, finish);
+          const send = () => socket.emit('account-register', {
+            email,
+            password,
+            displayName,
+            gender: genderEl.value,
+            age,
+            country,
+            city
+          }, finish);
           if (socket.connected) send();
           else socket.once('connect', send);
           setTimeout(() => {
@@ -3632,9 +4342,9 @@
             accountEmailCache = email;
             accountPasswordCache = password;
             applyLoggedInAccount(res.account, res.authToken);
-            setAuthStatus('Logged in.');
+            setAuthStatus('Logged in. Tap someone in People to chat.');
             showAuthDevCode(null);
-            openAccountModal();
+            closeAccountModal();
           });
           if (socket.connected) sendLogin();
           else socket.once('connect', sendLogin);
@@ -3645,13 +4355,33 @@
 
       const verifyForm = document.getElementById('auth-panel-verify');
       const verifySubmit = document.getElementById('verify-submit');
+      const verifyCodeEl = document.getElementById('verify-code');
+      if (verifyCodeEl) {
+        verifyCodeEl.addEventListener('input', () => {
+          const cleaned = String(verifyCodeEl.value || '').replace(/\D/g, '').slice(0, 6);
+          if (verifyCodeEl.value !== cleaned) verifyCodeEl.value = cleaned;
+        });
+      }
       if (verifyForm || verifySubmit) {
+        let verifying = false;
         const onVerify = (e) => {
-          if (e) e.preventDefault();
+          if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          if (verifying) return;
           if (!socket) connectSocket();
-          const email = (document.getElementById('verify-email') || {}).value;
-          const code = (document.getElementById('verify-code') || {}).value;
+          const email = String((document.getElementById('verify-email') || {}).value || '').trim();
+          const code = String((document.getElementById('verify-code') || {}).value || '').replace(/\D/g, '').slice(0, 6);
+          if (!email || code.length !== 6) {
+            setAuthStatus('Enter your email and the 6-digit code.', true);
+            return;
+          }
+          verifying = true;
+          if (verifySubmit) verifySubmit.textContent = 'Confirming…';
           const sendVerify = () => socket.emit('account-verify', { email, code }, (res) => {
+            verifying = false;
+            if (verifySubmit) verifySubmit.textContent = 'Confirm email';
             if (!res || !res.ok) {
               setAuthStatus((res && res.message) || 'Verification failed', true);
               return;
@@ -3665,13 +4395,97 @@
             }
             setAuthStatus(res.message || 'Verified! Your account is created.');
             showAuthDevCode(null);
-            openSettingsModal();
+            closeAccountModal();
           });
           if (socket.connected) sendVerify();
           else socket.once('connect', sendVerify);
         };
         if (verifyForm) verifyForm.addEventListener('submit', onVerify);
-        else verifySubmit.addEventListener('click', onVerify);
+        if (verifySubmit) verifySubmit.addEventListener('click', onVerify);
+      }
+
+      const forgotBtn = document.getElementById('forgot-password-btn');
+      if (forgotBtn) {
+        forgotBtn.addEventListener('click', () => {
+          const le = document.getElementById('login-email');
+          const re = document.getElementById('reset-email');
+          if (le && re && le.value) re.value = le.value;
+          switchAuthTab('reset');
+        });
+      }
+      const resetSendBtn = document.getElementById('reset-send-code-btn');
+      if (resetSendBtn) {
+        resetSendBtn.addEventListener('click', () => {
+          if (!socket) connectSocket();
+          const email = (document.getElementById('reset-email') || {}).value;
+          if (!email) {
+            setAuthStatus('Enter your registered email first.', true);
+            return;
+          }
+          resetSendBtn.disabled = true;
+          const send = () => socket.emit('account-password-reset-request', { email }, (res) => {
+            resetSendBtn.disabled = false;
+            if (!res || !res.ok) {
+              setAuthStatus((res && res.message) || 'Could not send code.', true);
+              return;
+            }
+            setAuthStatus(res.message || 'Code sent.');
+            showAuthDevCode(res.devCode);
+          });
+          if (socket.connected) send();
+          else socket.once('connect', send);
+        });
+      }
+      const resetForm = document.getElementById('auth-panel-reset');
+      if (resetForm) {
+        resetForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          if (!socket) connectSocket();
+          const email = (document.getElementById('reset-email') || {}).value;
+          const code = (document.getElementById('reset-code') || {}).value;
+          const password = (document.getElementById('reset-password') || {}).value;
+          const password2 = (document.getElementById('reset-password-2') || {}).value;
+          if (!email || !code || !password) {
+            setAuthStatus('Enter email, code, and a new password.', true);
+            return;
+          }
+          if (password !== password2) {
+            setAuthStatus('The two passwords do not match.', true);
+            return;
+          }
+          const send = () => socket.emit('account-password-reset', { email, code, password }, (res) => {
+            if (!res || !res.ok) {
+              setAuthStatus((res && res.message) || 'Could not reset password.', true);
+              return;
+            }
+            showAuthDevCode(null);
+            setAuthStatus(res.message || 'Password updated. Log in.');
+            const le = document.getElementById('login-email');
+            const lp = document.getElementById('login-password');
+            if (le) le.value = email;
+            if (lp) lp.value = '';
+            switchAuthTab('login');
+          });
+          if (socket.connected) send();
+          else socket.once('connect', send);
+        });
+      }
+
+      const regCountry = document.getElementById('reg-country');
+      const regCityList = document.getElementById('reg-city-datalist');
+      if (regCountry && regCityList) {
+        const fillRegCities = () => {
+          regCityList.innerHTML = '';
+          const locs = (typeof getWorldLocations === 'function' ? getWorldLocations() : window.WORLD_LOCATIONS) || {};
+          const cities = locs[regCountry.value] || [];
+          cities.forEach((c) => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            regCityList.appendChild(opt);
+          });
+        };
+        regCountry.addEventListener('input', fillRegCities);
+        regCountry.addEventListener('change', fillRegCities);
       }
 
       const resendBtn = document.getElementById('resend-code-btn');
@@ -3782,8 +4596,9 @@
 
     function setInboxTicks(msgId, status) {
       const el = document.querySelector('#inbox-messages [data-inbox-id="' + msgId + '"] .msg-ticks');
-      if (!el) return;
-      el.outerHTML = ticksHtml(status);
+      if (el) el.outerHTML = ticksHtml(status);
+      const hubEl = document.querySelector('#chat-messages [data-msg-id="' + msgId + '"] .msg-ticks, #chat-messages .msg-ticks[data-msg-id="' + msgId + '"]');
+      if (hubEl) hubEl.outerHTML = ticksHtml(status);
     }
 
     function inboxTime(ts) {
@@ -3865,7 +4680,7 @@
         </div>
         <div class="text-[11px] theme-muted truncate">${escapeHtml(t.lastText || '')}</div>
         <div class="text-[10px] theme-muted">${escapeHtml(formatLastSeen(t.lastSeenAt || t.lastLoginAt, t.online, t.away))}</div>`;
-        li.onclick = () => openInboxModal(t.partner);
+        li.onclick = () => openInboxWith(t.partner);
         ul.appendChild(li);
       });
     }
@@ -4703,13 +5518,21 @@
           typing: false,
           unread: 0,
           consecutiveSent: 0,
-          lastMessageTs: 0
+          lastMessageTs: 0,
+          registered: isMemberChatId(pid),
+          memberId: memberIdFromChatId(pid) || null,
+          partnerEmail: null,
+          inboxLimit: null
         };
       } else {
         if (profile) chats[pid].partnerProfile = profile;
         if (partnerSessionToken) chats[pid].partnerSessionToken = partnerSessionToken;
       }
       if (typeof chats[pid].lastMessageTs === 'undefined') chats[pid].lastMessageTs = 0;
+      if (isMemberChatId(pid)) {
+        chats[pid].registered = true;
+        chats[pid].memberId = chats[pid].memberId || memberIdFromChatId(pid);
+      }
     }
 
     // === MULTI CHAT FUNCTIONS ===
@@ -4723,7 +5546,12 @@
 
       // Merge online list with any local chats that have unread/history but id not yet remapped
       const byId = new Map();
-      allOnlineUsers.forEach(u => { if (u && u.id) byId.set(u.id, u); });
+      allOnlineUsers.forEach(u => {
+        if (!u) return;
+        const cid = chatIdForUser(u) || u.id;
+        if (!cid) return;
+        byId.set(cid, Object.assign({}, u, { id: u.id, listId: cid }));
+      });
       Object.keys(chats).forEach(cid => {
         if (!cid || cid === currentSocketId) return;
         if (byId.has(cid)) return;
@@ -4735,28 +5563,37 @@
             id: cid,
             sessionToken: c.partnerSessionToken || null,
             profile: c.partnerProfile,
-            away: true
+            away: !c.registered,
+            online: false,
+            registered: !!c.registered,
+            memberId: c.memberId || memberIdFromChatId(cid),
+            email: c.partnerEmail || null
           });
         }
       });
       const listForSidebar = Array.from(byId.values());
 
       let filtered = listForSidebar.filter(user => {
-        if (!user || !user.profile || user.id === currentSocketId) return false;
+        if (!user || !user.profile) return false;
+        if (isSelfUser(user)) return false;
+        const cid = chatIdForUser(user);
+        if (currentSocketId && (user.id === currentSocketId || cid === currentSocketId)) return false;
         if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
         // Hide blocked users
-        if (blockedIds.has(user.id) || (user.sessionToken && blockedIds.has(user.sessionToken))) return false;
+        if (blockedIds.has(user.id) || blockedIds.has(cid) || (user.sessionToken && blockedIds.has(user.sessionToken))) return false;
         const p = user.profile;
-        const age = parseInt(p.age) || 0;
+        const age = parseInt(p.age, 10);
+        const hasAge = Number.isFinite(age) && age > 0;
 
-        const chatData = chats[user.id];
+        const chatData = chats[cid] || chats[user.id];
         const hasUnread = chatData && (chatData.unread || 0) > 0;
 
         // Always include users with unread messages (so notification dot is visible)
         if (hasUnread) return true;
 
-        if (gender !== 'all' && p.gender !== gender) return false;
-        if (age < minAge || age > maxAge) return false;
+        if (gender !== 'all' && p.gender && p.gender !== gender) return false;
+        if (gender !== 'all' && !p.gender && !isMemberUser(user)) return false;
+        if (hasAge && (age < minAge || age > maxAge)) return false;
 
         // New country/city filters (fallback to old location string match if needed)
         const userCountry = p.country || (p.location ? p.location.split(', ').pop() : '');
@@ -4768,20 +5605,29 @@
         return true;
       });
 
-      // Sort by latest message activity first (new messages bubble to top), then unread
+      // Unread first, then latest activity, then registered members, then online
       filtered.sort((a, b) => {
-        const ta = (chats[a.id] && chats[a.id].lastMessageTs) || 0;
-        const tb = (chats[b.id] && chats[b.id].lastMessageTs) || 0;
-        if (ta !== tb) return tb - ta; // latest first
-        const au = (chats[a.id] && (chats[a.id].unread || 0) > 0) ? 1 : 0;
-        const bu = (chats[b.id] && (chats[b.id].unread || 0) > 0) ? 1 : 0;
+        const aid = chatIdForUser(a) || a.id;
+        const bid = chatIdForUser(b) || b.id;
+        const ta = (chats[aid] && chats[aid].lastMessageTs) || 0;
+        const tb = (chats[bid] && chats[bid].lastMessageTs) || 0;
+        const au = (chats[aid] && (chats[aid].unread || 0) > 0) ? 1 : 0;
+        const bu = (chats[bid] && (chats[bid].unread || 0) > 0) ? 1 : 0;
         if (au !== bu) return bu - au;
+        if (ta !== tb) return tb - ta;
+        const am = isMemberUser(a) ? 1 : 0;
+        const bm = isMemberUser(b) ? 1 : 0;
+        if (am !== bm) return bm - am;
+        const ao = a.online ? 1 : 0;
+        const bo = b.online ? 1 : 0;
+        if (ao !== bo) return bo - ao;
         return 0;
       });
 
       // Update sidebar count
       if (sidebarCountEl) {
-        sidebarCountEl.textContent = `${filtered.length} online`;
+        const liveN = filtered.filter((u) => u.online || (!u.registered && !u.away)).length;
+        sidebarCountEl.textContent = `${filtered.length} people · ${liveN} online`;
       }
 
       if (filtered.length === 0) {
@@ -4791,66 +5637,47 @@
 
       filtered.forEach(user => {
         const p = user.profile;
-        const isActive = user.id === activeChatId;
-        const chatData = chats[user.id] || {};
+        const cid = chatIdForUser(user) || user.id;
+        const isActive = cid === activeChatId || user.id === activeChatId;
+        const chatData = chats[cid] || chats[user.id] || {};
         const hasUnread = (chatData.unread || 0) > 0;
+        const member = isMemberUser(user);
 
         const row = document.createElement('div');
         const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : '');
-        row.className = `group flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer transition ${genderBg} ${isActive ? 'user-row-active' : ''} ${hasUnread ? 'border-l-2 border-red-500' : ''}`;
+        row.className = `people-row group transition ${member ? 'people-row-member' : ''} ${user.away ? 'people-row-away' : ''} ${genderBg} ${isActive ? 'user-row-active' : ''} ${hasUnread ? 'border-l-2 border-red-500' : ''}`;
 
         // Gender color for name
         const nameStyle = p.gender === 'male'
           ? 'color:#1565C0'
           : (p.gender === 'female' ? 'color:#C2185B' : '');
 
-        const avatar = p.image 
-          ? `<img src="${escapeHtml(p.image)}" class="w-7 h-7 rounded-full object-cover flex-shrink-0 ring-1 ring-gray-200" alt="" />`
-          : `<div class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"><i class="fa-solid fa-user text-xs"></i></div>`;
+        const avatar = peopleAvatarHtml(user, member ? 'md' : 'sm');
 
-        const safeName = escapeHtml(p.username || 'Anonymous');
+        const safeName = escapeHtml(p.username || user.displayName || 'Anonymous');
         const locWithFlag = formatLocationWithFlagHtml(p);
         const safeMind = p.whatsOnMind ? escapeHtml(p.whatsOnMind) : '';
-        const safeAge = escapeHtml(p.age != null ? String(p.age) : '?');
+        const genderBit = p.gender === 'female' ? 'F' : (p.gender === 'male' ? 'M' : '');
+        const safeAge = p.age != null && p.age !== '' ? escapeHtml(String(p.age)) : '';
+        const ageGender = [safeAge, genderBit].filter(Boolean).join('');
+        const presence = user.online ? 'online' : (user.away ? 'away' : (member ? 'offline' : ''));
+        const metaBits = [ageGender, locWithFlag, presence].filter(Boolean);
         row.innerHTML = `
-          <div class="flex items-center gap-2 flex-1 min-w-0">
-            <div class="flex-shrink-0">
-              ${avatar}
+          ${avatar}
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1">
+              <div class="text-sm font-semibold truncate group-hover:brightness-110 transition" style="${nameStyle}">${safeName}</div>
+              ${member ? '<span class="people-member-badge">Member</span>' : ''}
+              ${user.away ? '<span class="people-away-badge">Away</span>' : ''}
+              ${hasUnread ? `<span class="ml-0.5 w-2 h-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse ring-1 ring-red-400"></span>` : ''}
             </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1">
-                <div class="text-sm font-semibold truncate group-hover:brightness-110 transition" style="${nameStyle}">${safeName}</div>
-                ${hasUnread ? `<span class="ml-0.5 w-2 h-2 bg-red-500 rounded-full flex-shrink-0 animate-pulse ring-1 ring-red-400"></span>` : ''}
-              </div>
-              <div class="text-[10px] theme-muted truncate">${safeAge} • ${locWithFlag}</div>
-              ${safeMind ? `<div class="text-[9px] theme-muted italic truncate">${safeMind}</div>` : ''}
-            </div>
+            <div class="text-[10px] theme-muted truncate">${metaBits.join(' • ')}</div>
+            ${safeMind ? `<div class="text-[9px] theme-muted italic truncate">${safeMind}</div>` : ''}
           </div>
         `;
 
         row.addEventListener('click', () => {
-          if (!socket) return;
-          const pid = user.id;
-          if (!pid || pid === socket.id) return;
-          if (pid.startsWith('demo-')) {
-            alert('Demo users are for display only. Open another browser/tab, fill the form there, and they will appear as real online users you can chat with.');
-            return;
-          }
-          const wasNew = !chats[pid];
-
-          const p = user.profile;
-          ensureChat(pid, p);
-
-          // Clear unread when I explicitly open it by clicking
-          if (chats[pid]) chats[pid].unread = 0;
-
-          switchToChat(pid);
-
-          if (wasNew) {
-            socket.emit('start-chat-with', { targetId: pid });
-          }
-
-          renderSidebarUsers(); // refresh badges
+          openPeopleChat(user);
         });
 
         sidebarListEl.appendChild(row);
@@ -4863,70 +5690,48 @@
       container.innerHTML = '';
       const myId = socket ? socket.id : null;
       const others = allOnlineUsers.filter(user => {
+        if (isSelfUser(user)) return false;
         if (myId && user.id === myId) return false;
         if (!ENABLE_DEMO_USERS && user.id && String(user.id).startsWith('demo-')) return false;
+        if (!user.online && !user.away && !isMemberUser(user)) return false;
         return true;
       });
       if (others.length === 0) {
-        container.innerHTML = '<div class="text-[11px] theme-muted text-center py-4 px-2">No one else online yet. Open another browser or invite a friend!</div>';
+        const seenAs = myAccount && (myAccount.displayName || (myAccount.email && myAccount.email.split('@')[0]));
+        const selfNote = seenAs
+          ? 'You are hidden from this list. Other people see you as <strong>' + escapeHtml(seenAs) + '</strong>.'
+          : '';
+        container.innerHTML = '<div class="text-[11px] theme-muted text-center py-4 px-2">' +
+          (selfNote ? selfNote + '<br><br>' : '') +
+          'No one else is in chat yet. In the other window, do <strong>not</strong> log in. Fill username / age / location and tap See who\'s online.</div>';
         return;
       }
       others.forEach(user => {
-        const p = user.profile;
+        const p = user.profile || {};
         const div = document.createElement('div');
         const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : 'border border-gray-200');
-        div.className = `rounded p-1.5 flex items-center gap-1.5 text-xs cursor-pointer transition ${genderBg}`;
+        const member = isMemberUser(user);
+        div.className = `people-row text-xs transition ${member ? 'people-row-member' : ''} ${user.away ? 'people-row-away' : ''} ${genderBg}`;
         const nameStyle = p.gender === 'male'
           ? 'color:#1565C0'
           : (p.gender === 'female' ? 'color:#C2185B' : '');
-        const avatar = p.image
-          ? `<img src="${escapeHtml(p.image)}" class="w-5 h-5 rounded-full flex-shrink-0 object-cover" alt="">`
-          : '<div class="w-5 h-5 bg-gray-200 rounded-full flex-shrink-0"></div>';
+        const avatar = peopleAvatarHtml(user, member ? 'md' : 'sm');
         const locWithFlag = formatLocationWithFlagHtml(p);
+        const presence = user.online ? 'online' : (user.away ? 'away' : (member ? 'offline' : ''));
+        const genderBit = p.gender === 'female' ? 'F' : (p.gender === 'male' ? 'M' : '');
+        const ageBit = p.age != null && p.age !== '' ? escapeHtml(String(p.age)) : '';
+        const ageGender = [ageBit, genderBit].filter(Boolean).join('');
+        const metaBits = [ageGender, locWithFlag, presence].filter(Boolean);
         div.innerHTML = `
           ${avatar}
           <div class="min-w-0 flex-1">
-            <div class="font-medium truncate" style="${nameStyle}">${escapeHtml(p.username || 'Anonymous')}</div>
-            <div class="text-[9px] theme-muted truncate">${escapeHtml(p.age != null ? String(p.age) : '?')} • ${locWithFlag}</div>
+            <div class="font-medium truncate flex items-center gap-1" style="${nameStyle}">${escapeHtml(p.username || user.displayName || 'Anonymous')}${member ? ' <span class="people-member-badge">Member</span>' : ''}${user.away ? ' <span class="people-away-badge">Away</span>' : ''}</div>
+            <div class="text-[9px] theme-muted truncate">${metaBits.join(' • ')}</div>
             ${p.whatsOnMind ? `<div class="text-[8px] theme-muted italic truncate">${escapeHtml(p.whatsOnMind)}</div>` : ''}
           </div>
         `;
         div.onclick = () => {
-          if (currentProfile) {
-            const pid = user.id;
-            if (!pid || (socket && pid === socket.id)) return;
-            if (pid.startsWith('demo-')) {
-              alert('Demo users are for display only. Open another browser/tab, fill the form there, and they will appear as real online users you can chat with.');
-              return;
-            }
-            ensureChat(pid, p);
-            chats[pid].unread = 0;
-            showScreen('hub');
-            switchToChat(pid);
-            socket.emit('start-chat-with', { targetId: pid });
-          } else {
-            // Prompt user to fill details (no alert spam - highlight + focus)
-            const formSection = document.querySelector('#start-screen .flex-1 > div');
-            if (formSection) {
-              formSection.classList.add('!border-blue-500', 'ring-2', 'ring-blue-400');
-              setTimeout(() => {
-                if (formSection) formSection.classList.remove('!border-blue-500', 'ring-2', 'ring-blue-400');
-              }, 1400);
-            }
-            const firstField = document.getElementById('username');
-            if (firstField) firstField.focus();
-            // Subtle prompt
-            const hint = document.createElement('div');
-            hint.className = 'text-[10px] text-blue-600 mt-1';
-            hint.textContent = 'Please complete your details on the right first.';
-            const u = document.getElementById('username');
-            if (u && u.parentNode) {
-              const existing = u.parentNode.querySelector('.text-blue-600');
-              if (existing) existing.remove();
-              u.parentNode.appendChild(hint);
-              setTimeout(() => hint.remove(), 2200);
-            }
-          }
+          openPeopleChat(user);
         };
         container.appendChild(div);
       });
@@ -4961,8 +5766,8 @@
               : `<div class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 flex items-center justify-center"><i class="fa-solid fa-user text-sm sm:text-lg theme-muted"></i></div>`}
           </div>
           <div class="min-w-0 flex-1">
-            <div class="font-semibold text-sm sm:text-base truncate" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}</div>
-            <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${escapeHtml(headerProf.age != null ? String(headerProf.age) : '?')} • ${escapeHtml(headerProf.location || 'Unknown')}</div>
+            <div class="font-semibold text-sm sm:text-base truncate flex items-center gap-1" style="${headerNameStyle}">${escapeHtml(headerProf.username || 'Stranger')}${chatData.registered || isMemberChatId(partnerId) ? ' <span class="people-member-badge">Member</span>' : ''}</div>
+            <div class="text-[10px] sm:text-xs theme-muted -mt-0.5 truncate">${[headerProf.age != null && headerProf.age !== '' ? escapeHtml(String(headerProf.age)) : '', escapeHtml(headerProf.location || '')].filter(Boolean).join(' • ') || (chatData.registered ? 'Registered member' : 'Guest')}</div>
             ${headerProf.whatsOnMind ? `<div class="text-[10px] theme-muted italic truncate hidden sm:block">${escapeHtml(headerProf.whatsOnMind)}</div>` : ''}
             ${headerProf.relationshipStatus && RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus]
               ? `<div class="text-[9px] theme-muted truncate">${escapeHtml(RELATIONSHIP_STATUS_LABELS[headerProf.relationshipStatus])}</div>`
@@ -5002,10 +5807,14 @@
         const last = chatData.messages && chatData.messages.length
           ? chatData.messages[chatData.messages.length - 1]
           : null;
-        socket.emit('mark-read', {
-          targetId: partnerId,
-          lastMsgId: last && last.msgId ? last.msgId : null
-        });
+        if (chatData.registered || isMemberChatId(partnerId)) {
+          if (chatData.partnerEmail) socket.emit('inbox-mark-read', { email: chatData.partnerEmail });
+        } else {
+          socket.emit('mark-read', {
+            targetId: partnerId,
+            lastMsgId: last && last.msgId ? last.msgId : null
+          });
+        }
       }
       updateMuteButtonLabel(partnerId);
 
@@ -5041,7 +5850,33 @@
         return;
       }
 
-      const count = chats[activeChatId].consecutiveSent || 0;
+      const chatState = chats[activeChatId];
+      if (chatState.registered || isMemberChatId(activeChatId)) {
+        const lim = chatState.inboxLimit;
+        if (lim && lim.unlimited) {
+          statusEl.textContent = myAccount && myAccount.isOwner ? 'Owner: no message limit' : '';
+          statusEl.style.color = '#64748b';
+          if (multiChatInput) multiChatInput.disabled = false;
+          if (attachBtn) attachBtn.disabled = false;
+          return;
+        }
+        const remaining = lim && typeof lim.remaining === 'number' ? lim.remaining : (5 - (chatState.consecutiveSent || 0));
+        if (remaining <= 0) {
+          const when = lim && lim.resetAt ? new Date(lim.resetAt).toLocaleString() : '48 hours';
+          statusEl.textContent = '5/5 messages sent — wait for a reply, or try again after ' + when;
+          statusEl.style.color = '#f87171';
+          if (multiChatInput) multiChatInput.disabled = true;
+          if (attachBtn) attachBtn.disabled = true;
+        } else {
+          statusEl.textContent = (5 - remaining) + '/5 messages until they reply';
+          statusEl.style.color = '#64748b';
+          if (multiChatInput) multiChatInput.disabled = false;
+          if (attachBtn) attachBtn.disabled = false;
+        }
+        return;
+      }
+
+      const count = chatState.consecutiveSent || 0;
       if (count >= 5) {
         statusEl.textContent = `5/5 messages sent — wait for reply to send more`;
         statusEl.style.color = '#f87171';
@@ -5407,6 +6242,7 @@
             currentFilters = { gender: 'all', minAge: MIN_AGE, maxAge: MAX_AGE, country: '', city: '' };
             // Replace login UI completely with chat hub
             showScreen('hub');
+            updateMyUsernameChip();
             saveSession();
             // Re-bind email account to new session token (for friends)
             if (s && s.connected && accountAuthToken) {
@@ -5606,8 +6442,14 @@
           const val = safetyCheck.text;
 
           const chatState = chats[activeChatId];
-          if (chatState && (chatState.consecutiveSent || 0) >= 5) {
+          const partnerIsMember = !!(chatState && (chatState.registered || isMemberChatId(activeChatId)));
+          const inboxMemberChat = !!(partnerIsMember && myAccount && myAccount.verified);
+          if (!inboxMemberChat && chatState && (chatState.consecutiveSent || 0) >= 5) {
             alert('You can send up to 5 messages. Wait for the other user to respond.');
+            return;
+          }
+          if (inboxMemberChat && chatState.inboxLimit && !chatState.inboxLimit.unlimited && chatState.inboxLimit.remaining === 0) {
+            alert(chatState.inboxLimit.message || 'You can send up to 5 messages until they reply.');
             return;
           }
 
@@ -5640,12 +6482,44 @@
 
           updateChatLimitStatus();
 
-          socket.emit('send-message-to', {
-            targetId: activeChatId,
-            text: val,
-            replyTo: replyPayload,
-            msgId: localMsgId
-          });
+          if (inboxMemberChat) {
+            const to = (chatState && chatState.partnerEmail) || activeChatId;
+            socket.emit('inbox-send', { email: to, text: val }, (res) => {
+              if (!res || !res.ok) {
+                if (chatState && chatState.messages && chatState.messages.length) {
+                  chatState.messages.pop();
+                  chatState.consecutiveSent = Math.max(0, (chatState.consecutiveSent || 1) - 1);
+                }
+                if (chatMessagesEl && chatMessagesEl.lastChild) chatMessagesEl.lastChild.remove();
+                updateChatLimitStatus();
+                alert((res && res.message) || 'Message not sent.');
+                return;
+              }
+              if (res.message && chatState && chatState.messages.length) {
+                const last = chatState.messages[chatState.messages.length - 1];
+                last.msgId = res.message.id;
+                last.status = res.message.status || 'sent';
+                last.inbox = true;
+              }
+              if (res.unlimited || res.remaining != null) {
+                chatState.inboxLimit = {
+                  ok: true,
+                  remaining: res.remaining,
+                  unlimited: !!res.unlimited,
+                  used: res.used
+                };
+                chatState.consecutiveSent = res.used || chatState.consecutiveSent;
+              }
+              updateChatLimitStatus();
+            });
+          } else {
+            socket.emit('send-message-to', {
+              targetId: activeChatId,
+              text: val,
+              replyTo: replyPayload,
+              msgId: localMsgId
+            });
+          }
           multiChatInput.value = '';
           clearPendingReply();
           saveSession();
@@ -5691,16 +6565,23 @@
         addFriendBtn.addEventListener('click', () => {
           if (!activeChatId || !socket) return;
           if (!myAccount || !myAccount.verified) {
-            alert('Register and verify your email first (Account button in the top bar), then try again.');
+            alert('You can chat now, but friends are only for registered members. Create an account first. They must be registered too.');
             openAccountModal();
             return;
           }
           const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
+          const partnerEmail = chats[activeChatId] && chats[activeChatId].partnerEmail;
+          const partnerRegistered = !!(chats[activeChatId] && (chats[activeChatId].registered || partnerEmail));
           const name = (chats[activeChatId] && chats[activeChatId].partnerProfile && chats[activeChatId].partnerProfile.username) || 'this user';
-          if (!confirm('Send ' + name + ' a friend request? They must also have a verified email account.')) return;
+          if (!partnerRegistered) {
+            alert('You can keep chatting, but you cannot become friends until they also create a registered account.');
+            return;
+          }
+          if (!confirm('Send ' + name + ' a friend request? Both of you must be registered.')) return;
           socket.emit('friend-add', {
             targetId: activeChatId,
-            targetSessionToken: partnerTok || null
+            targetSessionToken: partnerTok || null,
+            email: partnerEmail || null
           }, (res) => {
             if (!res || !res.ok) {
               alert((res && res.message) || 'Could not send friend request.');
@@ -5719,6 +6600,15 @@
 
       // Account modal
       setupAccountModal();
+      const useGuestBtn = document.getElementById('use-as-guest-btn');
+      if (useGuestBtn) useGuestBtn.addEventListener('click', () => useThisTabAsGuest());
+      updateTabIdentityBar();
+      loadHiddenMode();
+      syncHiddenModeButtons();
+      ['hidden-mode-btn', 'hidden-mode-btn-start'].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', () => toggleHiddenMode());
+      });
 
       // Interest chips
       document.querySelectorAll('.interest-chip').forEach((chip) => {
@@ -6026,7 +6916,7 @@
       const mobileCountInit = document.getElementById('online-count-mobile');
       if (mobileCountInit) mobileCountInit.textContent = '0';
       if (chattingCountEl) chattingCountEl.textContent = '0 chatting';
-      if (statsEl) statsEl.classList.remove('hidden');
+
 
       // Mobile: back to user list from chat
       const mobileBackBtn = document.getElementById('mobile-back-to-list');
@@ -6090,7 +6980,7 @@
       initLocationDropdowns(true);
       loadPublicMembers();
 
-      // Restore session if refreshed within grace window (default 15 min)
+      // Restore session if refreshed within grace window (default 10 min)
       const saved = loadSession();
       if (saved && saved.profile) {
         currentProfile = saved.profile;
