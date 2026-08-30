@@ -49,6 +49,7 @@ By default **demo users are off** (correct for production).
 
 ## Features
 
+- Always-on **PineappleChat Bot** (clearly labeled BOT, not a fake person) so the lobby is never empty
 - Multi-chat, filters, block / unblock, report user
 - Email register + real verification code
 - Friends + friend requests, online / last-seen

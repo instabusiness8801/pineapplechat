@@ -268,6 +268,12 @@ function emitBotMessageSoon(socket, text, delayMs) {
   }, wait);
 }
 
+function siteBotGreetingText() {
+  const n = countOnlineHumans();
+  if (n <= 1) return SITE_BOT_GREETING;
+  return "Hi — I'm PineappleChat Bot, the official site bot (not a person). Real people show up in the People list as guests or members. I'm here if you want to chat. 18+ only.";
+}
+
 function nextSiteBotReply() {
   const text = SITE_BOT_REPLIES[siteBotReplyCursor % SITE_BOT_REPLIES.length];
   siteBotReplyCursor += 1;
@@ -281,11 +287,13 @@ function pickSiteBotReply(userText) {
   ) {
     return "I'm PineappleChat Bot — the site bot, not a person. Tap a real name in People when someone joins.";
   }
-  if (
-    /\b(sex|sexy|nude|nudes|horny|porn|nsfw|dick|pussy|fuck me|send nudes|onlyfans)\b/.test(t) ||
-    /\b(minor|underage|child|kid)\b/.test(t)
-  ) {
-    return "No. I'm a SFW site bot, 18+ only. I won't talk about sexual content or anything involving minors. Chat about something else, or wait for a real person.";
+  const sexual = /\b(sex|sexy|nude|nudes|horny|porn|nsfw|dick|pussy|fuck me|send nudes|onlyfans|hook.?up|cam girl)\b/.test(t);
+  const minor = /\b(minor|underage|child|kid|loli|shota|preteen)\b/.test(t);
+  if (sexual && minor) {
+    return "No. Sexual content involving minors is not allowed. PineappleChat is 18+ and I'm a site bot, not a person.";
+  }
+  if (sexual) {
+    return "I'm a site bot, not a dating or cam partner. Keep it SFW-ish here — this is a social chat lobby, not an NSFW bot.";
   }
   if (/^\s*(hi+|hey+|hello|yo|sup|hiya|howdy|good (morning|afternoon|evening))\b/.test(t)) {
     return "Hey! I'm PineappleChat Bot, not a person. Chat with me until someone real shows up, then tap them in People.";
@@ -1158,7 +1166,10 @@ io.on('connection', (socket) => {
         partnerSessionToken: SITE_BOT_ID
       });
       siteBotChats.add(socket.id);
-      emitBotMessageSoon(socket, SITE_BOT_GREETING, 500);
+      if (!socket.siteBotGreeted) {
+        socket.siteBotGreeted = true;
+        emitBotMessageSoon(socket, siteBotGreetingText(), 500);
+      }
       return;
     }
 
@@ -1471,6 +1482,12 @@ io.on('connection', (socket) => {
     const attachment = data && data.attachment;
     if (!targetId || !attachment || !attachment.data) return;
 
+    if (isSiteBotTarget(targetId)) {
+      siteBotChats.add(socket.id);
+      emitBotMessageSoon(socket, "I can only read text for now. I'm the site bot, not a cam or dating profile.");
+      return;
+    }
+
     let attDeliverId = targetId;
     const attMember = resolveMemberEmail(targetId);
     if (attMember) {
@@ -1575,6 +1592,11 @@ io.on('connection', (socket) => {
   socket.on('leave-chat', (data) => {
     const targetId = data && data.targetId;
     if (!targetId) return;
+    if (isSiteBotTarget(targetId)) {
+      siteBotChats.delete(socket.id);
+      socket.emit('chat-left', { by: socket.id, partnerId: SITE_BOT_ID });
+      return;
+    }
     const { socket: targetSocket } = resolveLiveSocketForTarget(targetId);
     if (targetSocket) {
       targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id });
@@ -1869,6 +1891,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('friend-add', (data, ack) => {
+    const targetRawEarly = (data && (data.email || data.targetEmail || data.targetId || data.targetSessionToken)) || null;
+    if (isSiteBotTarget(targetRawEarly)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'The site bot is not a person — you cannot add it as a friend.' });
+      return;
+    }
     const me = requireVerifiedAccount();
     const token = me ? me.token : sessionTokenOfSocket();
     const targetRaw = (data && (data.email || data.targetEmail || data.targetId || data.targetSessionToken)) || null;
@@ -2199,6 +2226,10 @@ io.on('connection', (socket) => {
 
   // ---- Report ----
   socket.on('report-user', (data, ack) => {
+    if (data && isSiteBotTarget(data.targetId)) {
+      if (typeof ack === 'function') ack({ ok: false, message: 'That is the site bot, not a person. You cannot report it as a user.' });
+      return;
+    }
     const rl = features.rateLimit('report:' + socket.id, 10, 60 * 60 * 1000);
     if (!rl.ok) {
       if (typeof ack === 'function') ack(rl);
@@ -2492,6 +2523,7 @@ function startListening() {
     const mailInfo = mail.mailStatus();
     console.log(`\nPineappleChat running on http://localhost:${PORT}`);
     console.log(`Demo users: ${ENABLE_DEMO_USERS ? 'ON' : 'OFF'}`);
+    console.log(`Site bot: ON (${SITE_BOT_PROFILE.username})`);
     console.log(`Session grace: ${SESSION_GRACE_MS / 1000}s after disconnect`);
     console.log(`Email: ${mailInfo.configured ? 'CONFIGURED (' + mailInfo.provider + ')' : 'NOT CONFIGURED — set RESEND_API_KEY or SMTP_* to send verification codes'}`);
     console.log(`Owner: ${accounts.ownerEmail()}`);

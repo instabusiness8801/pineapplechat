@@ -841,6 +841,10 @@
       background: #4A3F28;
       color: #F5D76E;
     }
+    .people-row-bot {
+      border: 1px solid color-mix(in srgb, var(--pine-gold-deep, #E8C547) 55%, transparent);
+      background: var(--chip-yellow, #FFF8E1);
+    }
     .people-avatar-wrap {
       position: relative;
       flex-shrink: 0;
@@ -3734,11 +3738,13 @@
       if (id.indexOf('bot:') === 0) return true;
       if (user.sessionToken && String(user.sessionToken).indexOf('bot:') === 0) return true;
       if (user.partnerSessionToken && String(user.partnerSessionToken).indexOf('bot:') === 0) return true;
+      const uname = String((user.profile && user.profile.username) || user.username || '').trim().toLowerCase();
+      if (uname === 'pineapplechat bot') return true;
       return false;
     }
 
     function botBadgeHtml(on) {
-      return on ? '<span class="people-bot-badge">Bot</span>' : '';
+      return on ? '<span class="people-bot-badge" title="Official site bot — not a person">BOT</span>' : '';
     }
 
     function isSelfUser(user) {
@@ -3926,6 +3932,10 @@
         return;
       }
       const go = () => {
+        if (isBotUser(user)) {
+          startLivePeopleChat(user);
+          return;
+        }
         if (isMemberUser(user) && myAccount && myAccount.verified && !user.online && !user.away) {
           openMemberHubChat(user);
           return;
@@ -6090,8 +6100,9 @@
 
       // Update sidebar count
       if (sidebarCountEl) {
-        const liveN = filtered.filter((u) => u.online || (!u.registered && !u.away)).length;
-        sidebarCountEl.textContent = `${filtered.length} people · ${liveN} online`;
+        const humans = filtered.filter((u) => !isBotUser(u) && !(chats[chatIdForUser(u) || u.id] && chats[chatIdForUser(u) || u.id].isBot));
+        const liveN = humans.filter((u) => u.online || (!u.registered && !u.away)).length;
+        sidebarCountEl.textContent = `${humans.length} people · ${liveN} online`;
       }
 
       if (filtered.length === 0) {
@@ -6106,10 +6117,11 @@
         const chatData = chats[cid] || chats[user.id] || {};
         const hasUnread = (chatData.unread || 0) > 0;
         const member = isMemberUser(user);
+        const isBot = isBotUser(user) || !!(chatData && chatData.isBot);
 
         const row = document.createElement('div');
-        const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : '');
-        row.className = `people-row group transition ${member ? 'people-row-member' : ''} ${user.away ? 'people-row-away' : ''} ${genderBg} ${isActive ? 'user-row-active' : ''} ${hasUnread ? 'border-l-2 border-red-500' : ''}`;
+        const genderBg = isBot ? 'people-row-bot' : (p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : ''));
+        row.className = `people-row group transition ${member && !isBot ? 'people-row-member' : ''} ${user.away ? 'people-row-away' : ''} ${genderBg} ${isActive ? 'user-row-active' : ''} ${hasUnread ? 'border-l-2 border-red-500' : ''}`;
 
         // Gender color for name
         const nameStyle = p.gender === 'male'
@@ -6126,8 +6138,7 @@
         const ageGender = [safeAge, genderBit].filter(Boolean).join('');
         const presence = user.online ? 'online' : (user.away ? 'away' : (member ? 'offline' : ''));
         const isHiddenPerson = peopleHiddenFlag(user);
-        const isBot = isBotUser(user) || !!(chatData && chatData.isBot);
-        const metaBits = isBot ? [presence].filter(Boolean) : [ageGender, locWithFlag, presence].filter(Boolean);
+        const metaBits = isBot ? ['site bot · not a person', presence].filter(Boolean) : [ageGender, locWithFlag, presence].filter(Boolean);
         row.innerHTML = `
           ${avatar}
           <div class="min-w-0 flex-1">
@@ -6177,9 +6188,10 @@
       others.forEach(user => {
         const p = user.profile || {};
         const div = document.createElement('div');
-        const genderBg = p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : 'border border-gray-200');
         const member = isMemberUser(user);
-        div.className = `people-row text-xs transition ${member ? 'people-row-member' : ''} ${user.away ? 'people-row-away' : ''} ${genderBg}`;
+        const isBot = isBotUser(user);
+        const genderBg = isBot ? 'people-row-bot' : (p.gender === 'male' ? 'user-row-male' : (p.gender === 'female' ? 'user-row-female' : 'border border-gray-200'));
+        div.className = `people-row text-xs transition ${member && !isBot ? 'people-row-member' : ''} ${user.away ? 'people-row-away' : ''} ${genderBg}`;
         const nameStyle = p.gender === 'male'
           ? 'color:#1565C0'
           : (p.gender === 'female' ? 'color:#C2185B' : '');
@@ -6189,8 +6201,7 @@
         const genderBit = p.gender === 'female' ? 'F' : (p.gender === 'male' ? 'M' : '');
         const ageBit = p.age != null && p.age !== '' ? escapeHtml(String(p.age)) : '';
         const ageGender = [ageBit, genderBit].filter(Boolean).join('');
-        const isBot = isBotUser(user);
-        const metaBits = isBot ? [presence].filter(Boolean) : [ageGender, locWithFlag, presence].filter(Boolean);
+        const metaBits = isBot ? ['site bot · not a person', presence].filter(Boolean) : [ageGender, locWithFlag, presence].filter(Boolean);
         div.innerHTML = `
           ${avatar}
           <div class="min-w-0 flex-1">
@@ -7019,6 +7030,13 @@
       if (blockBtn) {
         blockBtn.addEventListener('click', () => {
           if (!activeChatId || !socket) return;
+          if (chats[activeChatId] && (chats[activeChatId].isBot || isBotUser({ id: activeChatId, isBot: chats[activeChatId].isBot, sessionToken: chats[activeChatId].partnerSessionToken }))) {
+            socket.emit('leave-chat', { targetId: activeChatId });
+            delete chats[activeChatId];
+            closeCurrentChat();
+            renderSidebarUsers();
+            return;
+          }
           if (!confirm('Block this user? You will not see them online or be able to message them.')) return;
           const partnerTok = chats[activeChatId] && chats[activeChatId].partnerSessionToken;
           blockedIds.add(activeChatId);
@@ -7037,6 +7055,10 @@
       if (addFriendBtn) {
         addFriendBtn.addEventListener('click', () => {
           if (!activeChatId || !socket) return;
+          if (chats[activeChatId] && (chats[activeChatId].isBot || isBotUser({ id: activeChatId }))) {
+            alert('The site bot is not a person — you cannot add it as a friend.');
+            return;
+          }
           if (!myAccount || !myAccount.verified) {
             alert('You can chat now, but friends are only for registered members. Create an account first. They must be registered too.');
             openAccountModal();
@@ -7153,6 +7175,10 @@
       if (reportBtn && reportModal) {
         reportBtn.addEventListener('click', () => {
           if (!activeChatId) return;
+          if (chats[activeChatId] && (chats[activeChatId].isBot || isBotUser({ id: activeChatId }))) {
+            alert('That is the site bot, not a person. You cannot report it as a user.');
+            return;
+          }
           reportModal.classList.remove('hidden');
         });
       }
