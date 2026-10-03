@@ -11,6 +11,7 @@ const backup = require(path.join(__dirname, 'data-backup.js'));
 const accounts = require(path.join(__dirname, 'server-accounts.js'));
 const features = require(path.join(__dirname, 'server-features.js'));
 const inbox = require(path.join(__dirname, 'server-inbox.js'));
+const { createRooms } = require(path.join(__dirname, 'server-rooms.js'));
 
 const app = express();
 const server = http.createServer(app);
@@ -109,7 +110,8 @@ app.get('/api/config', (req, res) => {
       voiceNotes: true,
       report: true,
       invite: true,
-      interests: true
+      interests: true,
+      rooms: true
     }
   });
 });
@@ -910,6 +912,69 @@ function isAccountSocketOnline(email) {
   return false;
 }
 
+/** Block another user (used by 1:1 chat and rooms). */
+function performBlockUser(socket, data) {
+  const targetId = data && data.targetId;
+  if (!targetId) return;
+
+  if (isSiteBotTarget(targetId)) {
+    socket.emit('block-ok', {
+      targetId: SITE_BOT_ID,
+      targetSessionToken: SITE_BOT_ID,
+      message: 'The site bot stays in People — it is not a person you can block.'
+    });
+    return;
+  }
+
+  const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
+  const myToken = socket.sessionToken || socketToSession.get(socket.id);
+  const theirToken = targetSess ? sessionTokenOf(targetSess) : (data.targetSessionToken || null);
+
+  blockPair(socket.id, myToken, targetId, theirToken);
+  const meEmail = socket.accountEmail || accounts.getEmailForSession(myToken);
+  const memberEmail = resolveMemberEmail(targetId) || resolveMemberEmail(theirToken);
+  if (meEmail && memberEmail) {
+    const tok = myToken || socket.id;
+    accounts.bindSession(tok, meEmail);
+    accounts.blockAccount(tok, memberEmail);
+  }
+  // Mutual block effect for messaging: also mark reverse socket-level if live
+  if (targetSocket) {
+    blockPair(targetSocket.id, theirToken, socket.id, myToken);
+    targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id, blocked: true });
+    targetSocket.emit('you-were-blocked', { by: socket.id });
+  }
+
+  socket.emit('chat-left', { by: socket.id, partnerId: targetId, blocked: true });
+  socket.emit('block-ok', {
+    targetId,
+    targetSessionToken: theirToken,
+    message: 'User blocked. You will not see or message each other.'
+  });
+  broadcastOnlineUsers();
+}
+
+const rooms = createRooms({
+  io,
+  safety,
+  features,
+  accounts,
+  getLiveSocket,
+  getSessionByToken,
+  isBlockedBetween,
+  blockUser: performBlockUser,
+  sessionTokenOf: (socket) => (socket && (socket.sessionToken || socketToSession.get(socket.id))) || null,
+  accountEmailOf: (socket) => {
+    if (!socket) return null;
+    return socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id)) || null;
+  }
+});
+
+app.get('/api/rooms', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true, rooms: rooms.listPublic(), limits: rooms.limits });
+});
+
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
 
@@ -924,6 +989,8 @@ io.on('connection', (socket) => {
     socket.emit('online-users', buildOnlineListForViewer(socket.id, tok));
     broadcastStats();
   });
+
+  rooms.attach(socket);
 
   socket.on('set-profile', (profile) => {
     const cleanedProfile = profile || {};
@@ -1610,46 +1677,7 @@ io.on('connection', (socket) => {
     socket.emit('chat-left', { by: socket.id, partnerId: targetId });
   });
 
-  socket.on('block-user', (data) => {
-    const targetId = data && data.targetId;
-    if (!targetId) return;
-
-    if (isSiteBotTarget(targetId)) {
-      socket.emit('block-ok', {
-        targetId: SITE_BOT_ID,
-        targetSessionToken: SITE_BOT_ID,
-        message: 'The site bot stays in People — it is not a person you can block.'
-      });
-      return;
-    }
-
-    const { socket: targetSocket, session: targetSess } = resolveLiveSocketForTarget(targetId);
-    const myToken = socket.sessionToken || socketToSession.get(socket.id);
-    const theirToken = targetSess ? sessionTokenOf(targetSess) : (data.targetSessionToken || null);
-
-    blockPair(socket.id, myToken, targetId, theirToken);
-    const meEmail = socket.accountEmail || accounts.getEmailForSession(myToken);
-    const memberEmail = resolveMemberEmail(targetId) || resolveMemberEmail(theirToken);
-    if (meEmail && memberEmail) {
-      const tok = myToken || socket.id;
-      accounts.bindSession(tok, meEmail);
-      accounts.blockAccount(tok, memberEmail);
-    }
-    // Mutual block effect for messaging: also mark reverse socket-level if live
-    if (targetSocket) {
-      blockPair(targetSocket.id, theirToken, socket.id, myToken);
-      targetSocket.emit('chat-left', { by: socket.id, partnerId: socket.id, blocked: true });
-      targetSocket.emit('you-were-blocked', { by: socket.id });
-    }
-
-    socket.emit('chat-left', { by: socket.id, partnerId: targetId, blocked: true });
-    socket.emit('block-ok', {
-      targetId,
-      targetSessionToken: theirToken,
-      message: 'User blocked. You will not see or message each other.'
-    });
-    broadcastOnlineUsers();
-  });
+  socket.on('block-user', (data) => performBlockUser(socket, data));
 
   // ---- Email account + friends + inbox ----
   function sessionTokenOfSocket() {
@@ -2395,6 +2423,7 @@ io.on('connection', (socket) => {
   // Explicit log off — remove immediately (no grace period)
   socket.on('logout', (ack) => {
     const partnerId = getPartnerId(socket.id);
+    rooms.leaveCurrent(socket, 'logout');
     const removed = forceLogoutSocket(socket, 'logout');
     const name = removed && removed.profile && removed.profile.username;
     console.log(`[logout] ${name || socket.id} (removed=${!!removed})`);
@@ -2447,6 +2476,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     console.log(`[disconnect] ${socket.id} (${reason})`);
     siteBotChats.delete(socket.id);
+    rooms.handleDisconnect(socket);
 
     // Intentional log off already removed the session — do not start grace
     if (socket.intentionalLogout) {

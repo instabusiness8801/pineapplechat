@@ -58,6 +58,7 @@ By default **demo users are off** (correct for production).
 - Owner admin list (all users, reports, unlimited messaging)
 - Reply to messages, reactions, read receipts
 - Mute chat, voice notes, invite links
+- Group Rooms: only registered members can create (max 3 open each, 50 people per room); guests and members can join public rooms; creator can remove people and close the room; in-memory, so a restart/deploy clears rooms
 - Interests on profile, rate limits on spammy actions
 
 ## Tech

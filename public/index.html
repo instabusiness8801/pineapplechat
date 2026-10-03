@@ -66,6 +66,7 @@
           "Friend chat for registered members",
           "Persistent inbox",
           "Hidden mode",
+          "Group rooms created by registered members",
           "Block, mute, report",
           "18+ age gate"
         ],
@@ -1256,6 +1257,34 @@
       max-width: 320px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.18);
     }
+    /* ---- Group Rooms ---- */
+    #rooms-modal:not(.hidden),
+    #room-report-modal:not(.hidden) {
+      display: flex !important;
+      overflow-y: auto;
+      align-items: flex-start;
+      -webkit-overflow-scrolling: touch;
+    }
+    #room-report-modal > div {
+      margin-top: auto;
+      margin-bottom: auto;
+    }
+    .rooms-shell {
+      display: grid;
+      grid-template-columns: 1fr minmax(170px, 30%);
+      min-height: min(66vh, 540px);
+    }
+    .rooms-members-col { border-left-width: 1px; }
+    @media (max-width: 640px) {
+      .rooms-shell { grid-template-columns: 1fr; min-height: 60vh; }
+      .rooms-shell .rooms-members-col { display: none; border-left-width: 0; }
+      .rooms-shell.show-members .rooms-members-col { display: block; }
+      .rooms-shell.show-members .rooms-chat-col { display: none; }
+    }
+    .room-msg-name { font-size: 10px; font-weight: 600; opacity: 0.85; margin-bottom: 1px; }
+    .room-msg-actions { font-size: 10px; opacity: 0.6; margin-left: 6px; }
+    .room-msg-actions:hover { opacity: 1; }
+    .room-member-row button { font-size: 10px; padding: 2px 6px; border-radius: 6px; border-width: 1px; min-height: 26px; }
     .interest-chip.is-selected,
     .status-chip.is-selected {
       background: var(--pine-leaf, #2d8a4e);
@@ -1369,6 +1398,13 @@
                 aria-label="Invite">
           <i class="fa-solid fa-link text-sm"></i>
           <span class="hidden sm:inline">Invite</span>
+        </button>
+        <button type="button" id="rooms-btn" title="Group rooms"
+                class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-emerald-50 transition min-h-[36px] relative"
+                aria-label="Rooms">
+          <i class="fa-solid fa-people-group text-sm"></i>
+          <span class="hidden sm:inline">Rooms</span>
+          <span id="rooms-unread-badge" class="hidden nav-unread-badge absolute -top-1 -right-1">0</span>
         </button>
         <button type="button" id="members-btn" title="Registered members"
                 class="hidden items-center gap-1.5 text-xs font-medium px-2.5 sm:px-3 py-1.5 rounded-full border theme-border theme-surface theme-text hover:bg-emerald-50 transition min-h-[36px]"
@@ -1644,14 +1680,14 @@
 
       <section id="friend-chat" class="seo-block surface-card">
         <h2>Friend chat and inbox</h2>
-        <p>Create a free account to keep <strong>friend chat</strong>: add friends when both of you are registered, see last seen, and send inbox messages that wait if they are offline. Guests can still join a random chat with members who are online. Hidden mode lets you browse without appearing in the list until you send someone a message.</p>
+        <p>Create a free account to keep <strong>friend chat</strong>: add friends when both of you are registered, see last seen, and send inbox messages that wait if they are offline. Members can also create group <strong>Rooms</strong> that guests and members can join. Guests can still join a random chat with members who are online. Hidden mode lets you browse without appearing in the list until you send someone a message.</p>
       </section>
 
       <section id="faq" class="seo-block surface-card seo-faq">
         <h2>Chat FAQ</h2>
         <details>
           <summary>What is PineappleChat?</summary>
-          <p>PineappleChat is a browser-based random chat and friend chat site. You talk one-to-one with people who are online — not a public room full of overlapping voices.</p>
+          <p>PineappleChat is a browser-based random chat and friend chat site. You talk one-to-one with people who are online, and you can also join group Rooms that registered members create.</p>
         </details>
         <details>
           <summary>Can I start a random chat without registering?</summary>
@@ -1841,7 +1877,7 @@
               <h2 class="text-xs font-semibold mb-1">Chat FAQ</h2>
               <details>
                 <summary>What is PineappleChat?</summary>
-                <p>PineappleChat is a browser-based random chat and friend chat site. You talk one-to-one with people who are online — not a public room.</p>
+                <p>PineappleChat is a browser-based random chat and friend chat site. You talk one-to-one with people who are online, and you can also join group Rooms that registered members create.</p>
               </details>
               <details>
                 <summary>Can I start a random chat without registering?</summary>
@@ -2046,6 +2082,94 @@
     </div>
   </div>
   <div id="inbox-toast" class="inbox-toast hidden theme-surface border theme-border rounded-xl px-3 py-2 text-sm cursor-pointer"></div>
+
+  <!-- Group rooms (created by registered members; guests can join public rooms) -->
+  <div id="rooms-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-3 sm:p-4" style="background:rgba(0,0,0,0.45)">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col my-auto">
+      <div class="flex items-center justify-between gap-2 px-4 py-3 border-b theme-border">
+        <div class="flex items-center gap-2 min-w-0">
+          <button type="button" id="rooms-back-btn" class="hidden text-xs px-2 py-1 border theme-border rounded min-h-[32px]" aria-label="Back to rooms list"><i class="fa-solid fa-arrow-left"></i></button>
+          <div class="min-w-0">
+            <h2 id="rooms-title" class="text-lg font-semibold theme-text-strong truncate">Rooms</h2>
+            <div id="rooms-subtitle" class="text-[11px] theme-muted truncate">Group chat · 18+ · rooms are created by registered members</div>
+          </div>
+        </div>
+        <button type="button" id="rooms-modal-close" class="text-sm theme-muted hover:text-red-500 px-2" aria-label="Close rooms">✕</button>
+      </div>
+
+      <!-- List view -->
+      <div id="rooms-list-view" class="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+        <div class="rounded-xl border theme-border p-3 space-y-2">
+          <div class="text-xs font-semibold theme-text-strong">Create a room</div>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="room-create-name" type="text" maxlength="40" placeholder="Room name (3–40 characters)" autocomplete="off"
+                   class="flex-1 min-w-0 theme-input theme-field-yellow border rounded-xl px-3 py-2 text-sm outline-none min-h-[40px]">
+            <button type="button" id="room-create-btn" class="btn-primary-g px-4 py-2 rounded-xl text-sm min-h-[40px] disabled:opacity-50 disabled:cursor-not-allowed">Create room</button>
+          </div>
+          <label class="flex items-center gap-2 text-[11px] theme-text"><input id="room-create-public" type="checkbox" checked class="w-4 h-4"> Show in the public room list (unlisted rooms are join-by-link only)</label>
+          <p id="room-create-hint" class="text-[11px] theme-muted"></p>
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-xs font-semibold theme-text-strong">Public rooms</div>
+            <button type="button" id="rooms-refresh-btn" class="text-[11px] px-2 py-1 rounded border theme-border">↻ Refresh</button>
+          </div>
+          <ul id="rooms-public-list" class="text-sm space-y-1.5"></ul>
+        </div>
+        <div id="rooms-mine-wrap" class="hidden">
+          <div class="text-xs font-semibold theme-text-strong mb-1">Your rooms</div>
+          <ul id="rooms-mine-list" class="text-sm space-y-1.5"></ul>
+        </div>
+        <p class="text-[10px] theme-muted">Be respectful. Links, contact details and unsafe words are blocked. Rooms close when they stay empty, and all rooms reset when the server restarts.</p>
+      </div>
+
+      <!-- Room view -->
+      <div id="room-view" class="hidden flex-1 min-h-0 flex flex-col">
+        <div class="px-3 py-2 border-b theme-border flex flex-wrap items-center gap-1.5 text-[11px]">
+          <button type="button" id="room-members-toggle" class="sm:hidden px-2 py-1 rounded border theme-border min-h-[32px]">Members</button>
+          <button type="button" id="room-copy-link" class="px-2 py-1 rounded border theme-border min-h-[32px]"><i class="fa-solid fa-link"></i> Copy link</button>
+          <button type="button" id="room-leave-btn" class="px-2 py-1 rounded border border-red-200 text-red-500 min-h-[32px]"><i class="fa-solid fa-door-open"></i> Leave</button>
+          <button type="button" id="room-close-btn" class="hidden px-2 py-1 rounded border border-red-300 text-red-600 min-h-[32px]"><i class="fa-solid fa-xmark"></i> Close room</button>
+        </div>
+        <div id="rooms-shell" class="rooms-shell flex-1 min-h-0">
+          <section class="rooms-chat-col flex flex-col min-h-0">
+            <div id="room-messages" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm theme-chat-bg"></div>
+            <form id="room-form" class="p-2 sm:p-3 border-t theme-border flex gap-2" style="padding-bottom:max(0.5rem, env(safe-area-inset-bottom, 0px))">
+              <input id="room-input" type="text" maxlength="800" placeholder="Message the room…" enterkeyhint="send" autocomplete="off"
+                     class="flex-1 min-w-0 theme-input theme-field-yellow border rounded-2xl px-3 py-2 text-sm outline-none min-h-[44px]">
+              <button type="submit" class="btn-primary-g px-4 py-2 rounded-2xl text-sm min-h-[44px]" aria-label="Send to room"><i class="fa-solid fa-paper-plane"></i></button>
+            </form>
+            <div id="room-status" class="text-[10px] px-3 pb-1 theme-muted"></div>
+          </section>
+          <aside class="rooms-members-col theme-border overflow-y-auto p-2">
+            <div class="text-xs font-semibold theme-text-strong mb-1 px-1">Members <span id="room-member-count" class="font-normal theme-muted"></span></div>
+            <ul id="room-members-list" class="text-xs space-y-1"></ul>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Report someone in a room (stored with the existing reports) -->
+  <div id="room-report-modal" class="fixed inset-0 z-[210] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
+    <div class="theme-surface border theme-border rounded-2xl shadow-2xl w-full max-w-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold theme-text-strong">Report in room</h2>
+        <button type="button" id="room-report-close" class="text-sm theme-muted hover:text-red-500 px-2">✕</button>
+      </div>
+      <p id="room-report-target" class="text-[11px] theme-muted mb-2"></p>
+      <select id="room-report-reason" class="w-full theme-input border rounded-xl px-3 py-2 text-sm mb-2">
+        <option value="harassment">Harassment / bullying</option>
+        <option value="spam">Spam / scams</option>
+        <option value="sexual">Sexual / inappropriate</option>
+        <option value="hate">Hate speech</option>
+        <option value="underage">Suspected underage</option>
+        <option value="other">Other</option>
+      </select>
+      <textarea id="room-report-details" maxlength="300" rows="3" placeholder="Optional details…" class="w-full theme-input border rounded-xl px-3 py-2 text-sm mb-3 resize-none"></textarea>
+      <button type="button" id="room-report-submit" class="w-full btn-primary-g py-2 rounded-xl text-sm">Submit report</button>
+    </div>
+  </div>
 
   <!-- Report user modal -->
   <div id="report-modal" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.45)">
@@ -3466,7 +3590,625 @@
         addSystemMessage('Unable to connect. Please refresh the page.');
       });
 
+      bindRoomSocketEvents(socket);
+
       return socket;
+    }
+
+    // ---- Group Rooms (registered members create; guests with an 18+ profile can join) ----
+    let roomsCanCreate = false;
+    let roomsPublicList = [];
+    let roomsMineList = [];
+    /** @type {null|{id:string,name:string,isPublic:boolean,isCreator:boolean,canModerate:boolean,members:Array,myKey:string|null,creatorName:string}} */
+    let currentRoom = null;
+    let roomMessages = [];
+    let roomUnread = 0;
+    const roomMutedKeys = new Set();
+    let roomReportTarget = null;
+    let pendingRoomInvite = null;
+    let roomSocketBound = null;
+    let roomStatusTimer = null;
+
+    function roomsEl(id) { return document.getElementById(id); }
+    function roomsModalOpen() {
+      const m = roomsEl('rooms-modal');
+      return !!(m && !m.classList.contains('hidden'));
+    }
+    function roomViewVisible() {
+      const v = roomsEl('room-view');
+      return roomsModalOpen() && !!(v && !v.classList.contains('hidden'));
+    }
+    function setRoomUnread(n) {
+      roomUnread = Math.max(0, Number(n) || 0);
+      const badge = roomsEl('rooms-unread-badge');
+      if (!badge) return;
+      badge.textContent = roomUnread > 99 ? '99+' : String(roomUnread);
+      badge.classList.toggle('hidden', roomUnread === 0);
+    }
+    function setRoomStatus(text) {
+      const el = roomsEl('room-status');
+      if (!el) return;
+      el.textContent = text || '';
+      if (roomStatusTimer) clearTimeout(roomStatusTimer);
+      if (text) roomStatusTimer = setTimeout(() => { el.textContent = ''; }, 5000);
+    }
+    function roomsRegisteredHere() {
+      return !!(myAccount && myAccount.verified);
+    }
+
+    /** Rooms need the same 18+ profile as the rest of the site. */
+    function ensureRoomProfile(done) {
+      if (!socket) connectSocket();
+      if (currentProfile && socket) {
+        if (socket.connected) done();
+        else alert('Reconnecting… please try again in a moment.');
+        return;
+      }
+      if (roomsRegisteredHere() && myAccount.country && myAccount.city && socket) {
+        ensureLiveSessionFromAccount(done);
+        return;
+      }
+      closeRoomsModal();
+      showScreen('start');
+      alert('Fill in your details (18+) and tap "See who\'s online" first. Then open Rooms to join.');
+      promptCompleteProfile('Complete your details, then open Rooms.');
+    }
+
+    function updateRoomCreateUI() {
+      const btn = roomsEl('room-create-btn');
+      const input = roomsEl('room-create-name');
+      const hint = roomsEl('room-create-hint');
+      const can = roomsRegisteredHere();
+      if (btn) {
+        btn.disabled = !can;
+        btn.title = can ? 'Create a group room' : 'Register to create rooms';
+      }
+      if (input) input.disabled = !can;
+      if (hint) {
+        hint.innerHTML = '';
+        if (can) {
+          hint.textContent = 'You can have up to 3 open rooms with up to 50 people each. You can remove people and close your room.';
+        } else {
+          hint.appendChild(document.createTextNode('Register to create rooms. Guests can still join public rooms. '));
+          const reg = document.createElement('button');
+          reg.type = 'button';
+          reg.className = 'underline font-semibold theme-text';
+          reg.textContent = 'Register / Log in';
+          reg.addEventListener('click', () => { closeRoomsModal(); openAccountModal(); });
+          hint.appendChild(reg);
+        }
+      }
+    }
+
+    function roomListItem(r, opts) {
+      const li = document.createElement('li');
+      li.className = 'flex items-center justify-between gap-2 rounded-xl border theme-border px-3 py-2';
+      const info = document.createElement('div');
+      info.className = 'min-w-0';
+      const nm = document.createElement('div');
+      nm.className = 'font-semibold theme-text-strong truncate';
+      nm.textContent = r.name + (r.isPublic === false ? ' (unlisted)' : '');
+      const meta = document.createElement('div');
+      meta.className = 'text-[11px] theme-muted truncate';
+      meta.textContent = (r.memberCount || 0) + '/' + (r.maxMembers || 50) + ' people · by ' + (r.creatorName || 'member');
+      info.appendChild(nm);
+      info.appendChild(meta);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const here = currentRoom && currentRoom.id === r.id;
+      btn.className = (here ? 'border theme-border theme-text' : 'btn-primary-g') + ' text-xs px-3 py-1.5 rounded-lg min-h-[34px] flex-shrink-0';
+      btn.textContent = here ? 'Open' : 'Join';
+      btn.addEventListener('click', () => {
+        if (here) showRoomView();
+        else joinRoomById(r.id);
+      });
+      li.appendChild(info);
+      li.appendChild(btn);
+      return li;
+    }
+
+    function renderRoomsLists() {
+      const ul = roomsEl('rooms-public-list');
+      if (ul) {
+        ul.innerHTML = '';
+        if (!roomsPublicList.length) {
+          const li = document.createElement('li');
+          li.className = 'text-xs theme-muted';
+          li.textContent = 'No public rooms right now.' + (roomsRegisteredHere() ? ' Create one above!' : ' Registered members can create one.');
+          ul.appendChild(li);
+        }
+        roomsPublicList.forEach((r) => ul.appendChild(roomListItem(r)));
+      }
+      const wrap = roomsEl('rooms-mine-wrap');
+      const mine = roomsEl('rooms-mine-list');
+      if (wrap && mine) {
+        mine.innerHTML = '';
+        wrap.classList.toggle('hidden', !roomsMineList.length);
+        roomsMineList.forEach((r) => mine.appendChild(roomListItem(r)));
+      }
+    }
+
+    function refreshRoomsList() {
+      updateRoomCreateUI();
+      if (socket && socket.connected) {
+        socket.emit('rooms-list', {}, (res) => {
+          if (!res || !res.ok) return;
+          roomsPublicList = Array.isArray(res.rooms) ? res.rooms : [];
+          roomsMineList = Array.isArray(res.myRooms) ? res.myRooms : [];
+          roomsCanCreate = !!res.canCreate;
+          renderRoomsLists();
+        });
+        return;
+      }
+      fetch('/api/rooms').then((r) => r.json()).then((res) => {
+        roomsPublicList = (res && Array.isArray(res.rooms)) ? res.rooms : [];
+        renderRoomsLists();
+      }).catch(() => {});
+    }
+
+    function showRoomListView() {
+      const list = roomsEl('rooms-list-view');
+      const view = roomsEl('room-view');
+      if (list) list.classList.remove('hidden');
+      if (view) view.classList.add('hidden');
+      const back = roomsEl('rooms-back-btn');
+      if (back) back.classList.add('hidden');
+      const title = roomsEl('rooms-title');
+      if (title) title.textContent = currentRoom ? 'Rooms · in "' + currentRoom.name + '"' : 'Rooms';
+      const sub = roomsEl('rooms-subtitle');
+      if (sub) sub.textContent = 'Group chat · 18+ · rooms are created by registered members';
+      refreshRoomsList();
+    }
+
+    function showRoomView() {
+      if (!currentRoom) { showRoomListView(); return; }
+      const list = roomsEl('rooms-list-view');
+      const view = roomsEl('room-view');
+      if (list) list.classList.add('hidden');
+      if (view) view.classList.remove('hidden');
+      const back = roomsEl('rooms-back-btn');
+      if (back) back.classList.remove('hidden');
+      const shell = roomsEl('rooms-shell');
+      if (shell) shell.classList.remove('show-members');
+      renderRoomHeader();
+      renderRoomMembers();
+      renderRoomMessages();
+      setRoomUnread(0);
+      const input = roomsEl('room-input');
+      if (input && window.matchMedia && window.matchMedia('(min-width: 641px)').matches) input.focus();
+    }
+
+    function renderRoomHeader() {
+      if (!currentRoom) return;
+      const title = roomsEl('rooms-title');
+      if (title) title.textContent = currentRoom.name;
+      const sub = roomsEl('rooms-subtitle');
+      const count = (currentRoom.members || []).length;
+      if (sub) sub.textContent = count + ' here · created by ' + (currentRoom.creatorName || 'member') + (currentRoom.isPublic ? '' : ' · unlisted');
+      const closeBtn = roomsEl('room-close-btn');
+      if (closeBtn) closeBtn.classList.toggle('hidden', !currentRoom.canModerate);
+      const mc = roomsEl('room-member-count');
+      if (mc) mc.textContent = '(' + count + ')';
+    }
+
+    function roomActionBtn(label, cls, onClick) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = cls + ' theme-border';
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      return b;
+    }
+
+    function renderRoomMembers() {
+      const ul = roomsEl('room-members-list');
+      if (!ul || !currentRoom) return;
+      ul.innerHTML = '';
+      (currentRoom.members || []).forEach((m) => {
+        const li = document.createElement('li');
+        li.className = 'room-member-row rounded-lg border theme-border px-2 py-1.5';
+        const top = document.createElement('div');
+        top.className = 'flex items-center gap-1 min-w-0';
+        const nm = document.createElement('span');
+        nm.className = 'font-semibold theme-text-strong truncate';
+        nm.textContent = m.name;
+        top.appendChild(nm);
+        const tag = document.createElement('span');
+        tag.className = 'text-[9px] px-1.5 rounded-full ' + (m.isCreator ? 'bg-amber-100 text-amber-800' : 'theme-surface-2 theme-muted');
+        tag.textContent = m.isCreator ? 'Creator' : (m.registered ? 'Member' : 'Guest');
+        top.appendChild(tag);
+        if (m.self) {
+          const you = document.createElement('span');
+          you.className = 'text-[9px] theme-muted';
+          you.textContent = '(you)';
+          top.appendChild(you);
+        }
+        li.appendChild(top);
+        if (!m.self) {
+          const actions = document.createElement('div');
+          actions.className = 'flex flex-wrap gap-1 mt-1';
+          const muted = roomMutedKeys.has(m.key);
+          actions.appendChild(roomActionBtn(muted ? 'Unmute' : 'Mute', 'theme-text', () => {
+            if (muted) roomMutedKeys.delete(m.key); else roomMutedKeys.add(m.key);
+            renderRoomMembers();
+            renderRoomMessages();
+          }));
+          actions.appendChild(roomActionBtn('Report', 'text-amber-600', () => openRoomReport({ memberKey: m.key, name: m.name })));
+          actions.appendChild(roomActionBtn('Block', 'text-red-500', () => blockRoomMember(m)));
+          if (currentRoom.canModerate && !m.isCreator) {
+            actions.appendChild(roomActionBtn('Remove', 'text-red-600 font-semibold', () => kickRoomMember(m)));
+          }
+          li.appendChild(actions);
+        }
+        ul.appendChild(li);
+      });
+    }
+
+    function roomMessageEl(msg) {
+      const self = !!(currentRoom && msg.from && msg.from.key === currentRoom.myKey);
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex ' + (self ? 'justify-end' : 'justify-start') + ' message-row';
+      const bubble = document.createElement('div');
+      bubble.className = 'message-bubble ' + (self ? 'message-self' : 'message-stranger');
+      const name = document.createElement('div');
+      name.className = 'room-msg-name';
+      name.textContent = self ? 'You' : ((msg.from && msg.from.name) || 'Someone') + (msg.from && msg.from.isCreator ? ' · creator' : '');
+      bubble.appendChild(name);
+      const text = document.createElement('div');
+      text.textContent = msg.text;
+      bubble.appendChild(text);
+      const meta = document.createElement('div');
+      meta.className = 'text-[10px] opacity-70 mt-0.5';
+      meta.textContent = msg.time || '';
+      if (!self) {
+        const rep = document.createElement('button');
+        rep.type = 'button';
+        rep.className = 'room-msg-actions underline';
+        rep.textContent = 'Report';
+        rep.title = 'Report this message';
+        rep.addEventListener('click', () => openRoomReport({ memberKey: msg.from && msg.from.key, msgId: msg.msgId, name: msg.from && msg.from.name, text: msg.text }));
+        meta.appendChild(rep);
+      }
+      bubble.appendChild(meta);
+      wrapper.appendChild(bubble);
+      return wrapper;
+    }
+
+    function renderRoomMessages() {
+      const box = roomsEl('room-messages');
+      if (!box) return;
+      box.innerHTML = '';
+      const visible = roomMessages.filter((m) => !(m.from && roomMutedKeys.has(m.from.key)));
+      if (!visible.length) {
+        const empty = document.createElement('div');
+        empty.className = 'text-center text-xs theme-muted py-6';
+        empty.textContent = 'No messages yet. Say hi to the room!';
+        box.appendChild(empty);
+      }
+      visible.forEach((m) => box.appendChild(roomMessageEl(m)));
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function appendRoomMessage(msg) {
+      if (!msg || !msg.msgId) return;
+      if (roomMessages.some((m) => m.msgId === msg.msgId)) return;
+      roomMessages.push(msg);
+      while (roomMessages.length > 200) roomMessages.shift();
+      if (msg.from && roomMutedKeys.has(msg.from.key)) return;
+      if (roomViewVisible()) {
+        const box = roomsEl('room-messages');
+        if (box) {
+          if (box.firstChild && !box.querySelector('.message-row')) box.innerHTML = '';
+          const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+          box.appendChild(roomMessageEl(msg));
+          if (nearBottom || (currentRoom && msg.from && msg.from.key === currentRoom.myKey)) box.scrollTop = box.scrollHeight;
+        }
+      } else if (!(currentRoom && msg.from && msg.from.key === currentRoom.myKey)) {
+        setRoomUnread(roomUnread + 1);
+      }
+    }
+
+    function enterRoom(room) {
+      if (!room) return;
+      const sameRoom = currentRoom && currentRoom.id === room.id;
+      currentRoom = {
+        id: room.id,
+        name: room.name,
+        isPublic: room.isPublic !== false,
+        isCreator: !!room.isCreator,
+        canModerate: !!room.canModerate,
+        creatorName: room.creatorName || '',
+        members: Array.isArray(room.members) ? room.members : [],
+        myKey: room.myKey || ((room.members || []).find((m) => m.self) || {}).key || null
+      };
+      if (!sameRoom) {
+        roomMessages = [];
+        roomMutedKeys.clear();
+      }
+      (room.recent || []).forEach((m) => {
+        if (!roomMessages.some((x) => x.msgId === m.msgId)) roomMessages.push(m);
+      });
+      roomMessages.sort((a, b) => (a.at || 0) - (b.at || 0));
+      if (roomsModalOpen()) showRoomView();
+    }
+
+    function resetRoomState(notice) {
+      currentRoom = null;
+      roomMessages = [];
+      roomMutedKeys.clear();
+      setRoomUnread(0);
+      if (roomsModalOpen()) showRoomListView();
+      if (notice) alert(notice);
+    }
+
+    function joinRoomById(roomId) {
+      ensureRoomProfile(() => {
+        socket.emit('room-join', { roomId }, (res) => {
+          if (!res || !res.ok) {
+            alert((res && res.message) || 'Could not join that room.');
+            refreshRoomsList();
+            return;
+          }
+          pendingRoomInvite = null;
+          if (!roomsModalOpen()) openRoomsModal();
+          enterRoom(res.room);
+          showRoomView();
+        });
+      });
+    }
+
+    function createRoomFromForm() {
+      if (!roomsRegisteredHere()) {
+        updateRoomCreateUI();
+        return;
+      }
+      const input = roomsEl('room-create-name');
+      const name = String((input && input.value) || '').replace(/\s+/g, ' ').trim();
+      if (name.length < 3 || name.length > 40) {
+        alert('Room name must be 3–40 characters.');
+        return;
+      }
+      const check = validateChatMessage(name);
+      if (!check.ok) {
+        alert('That room name is not allowed (no links, contact details or unsafe words).');
+        return;
+      }
+      const isPublic = !!(roomsEl('room-create-public') && roomsEl('room-create-public').checked);
+      ensureRoomProfile(() => {
+        socket.emit('room-create', { name, isPublic }, (res) => {
+          if (!res || !res.ok) {
+            if (res && res.code === 'register-required') {
+              closeRoomsModal();
+              openAccountModal();
+              return;
+            }
+            alert((res && res.message) || 'Could not create the room.');
+            return;
+          }
+          if (input) input.value = '';
+          enterRoom(res.room);
+          showRoomView();
+        });
+      });
+    }
+
+    function sendRoomMessage(text) {
+      if (!currentRoom || !socket) return;
+      const check = validateChatMessage(text);
+      if (!check.ok) { setRoomStatus(check.message || 'Message blocked by safety filters.'); return; }
+      const msgId = 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      socket.emit('room-send', { roomId: currentRoom.id, text: check.text, msgId }, (res) => {
+        if (!res || !res.ok) {
+          setRoomStatus((res && res.message) || 'Message not sent.');
+          if (res && res.code === 'not-member') resetRoomState('You are no longer in this room.');
+          return;
+        }
+        appendRoomMessage(res.message);
+      });
+    }
+
+    function leaveCurrentRoom() {
+      if (!currentRoom) return;
+      const id = currentRoom.id;
+      if (socket) socket.emit('room-leave', { roomId: id }, () => {});
+      resetRoomState();
+    }
+
+    function closeCurrentRoom() {
+      if (!currentRoom || !currentRoom.canModerate) return;
+      if (!confirm('Close "' + currentRoom.name + '" for everyone?')) return;
+      socket.emit('room-close', { roomId: currentRoom.id }, (res) => {
+        if (!res || !res.ok) { setRoomStatus((res && res.message) || 'Could not close the room.'); return; }
+        resetRoomState();
+      });
+    }
+
+    function kickRoomMember(m) {
+      if (!currentRoom || !m) return;
+      if (!confirm('Remove ' + m.name + ' from this room? They will not be able to rejoin it.')) return;
+      socket.emit('room-kick', { roomId: currentRoom.id, memberKey: m.key }, (res) => {
+        setRoomStatus(res && res.ok ? m.name + ' was removed.' : ((res && res.message) || 'Could not remove.'));
+      });
+    }
+
+    function blockRoomMember(m) {
+      if (!currentRoom || !m) return;
+      if (!confirm('Block ' + m.name + '? You will not see each other\'s messages here or in People.')) return;
+      socket.emit('room-block', { roomId: currentRoom.id, memberKey: m.key }, (res) => {
+        setRoomStatus((res && res.message) || (res && res.ok ? 'Blocked.' : 'Could not block.'));
+        if (res && res.ok) {
+          roomMessages = roomMessages.filter((x) => !(x.from && x.from.key === m.key));
+          renderRoomMessages();
+        }
+      });
+    }
+
+    function openRoomReport(target) {
+      if (!currentRoom || !target || !target.memberKey) return;
+      roomReportTarget = target;
+      const modal = roomsEl('room-report-modal');
+      const label = roomsEl('room-report-target');
+      if (label) {
+        label.textContent = 'Reporting ' + (target.name || 'this person') + ' in "' + currentRoom.name + '"' +
+          (target.text ? ' — message: "' + String(target.text).slice(0, 80) + '"' : '');
+      }
+      const details = roomsEl('room-report-details');
+      if (details) details.value = '';
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeRoomReport() {
+      roomReportTarget = null;
+      const modal = roomsEl('room-report-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function submitRoomReport() {
+      if (!roomReportTarget || !currentRoom || !socket) { closeRoomReport(); return; }
+      const t = roomReportTarget;
+      socket.emit('room-report', {
+        roomId: currentRoom.id,
+        memberKey: t.memberKey,
+        msgId: t.msgId || null,
+        reason: (roomsEl('room-report-reason') || {}).value || 'other',
+        details: (roomsEl('room-report-details') || {}).value || ''
+      }, (res) => {
+        closeRoomReport();
+        alert((res && res.message) || 'Report submitted.');
+      });
+    }
+
+    function openRoomsModal() {
+      const modal = roomsEl('rooms-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      if (currentRoom) showRoomView();
+      else showRoomListView();
+    }
+
+    function closeRoomsModal() {
+      const modal = roomsEl('rooms-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function bindRoomSocketEvents(s) {
+      if (!s || roomSocketBound === s) return;
+      roomSocketBound = s;
+      s.on('room-message', (msg) => {
+        if (!msg || !currentRoom || msg.roomId !== currentRoom.id) return;
+        appendRoomMessage(msg);
+      });
+      s.on('room-members', (p) => {
+        if (!p || !currentRoom || p.roomId !== currentRoom.id) return;
+        currentRoom.members = Array.isArray(p.members) ? p.members : [];
+        if (roomViewVisible()) { renderRoomHeader(); renderRoomMembers(); }
+      });
+      s.on('room-kicked', (p) => {
+        if (!p || !currentRoom || p.roomId !== currentRoom.id) return;
+        resetRoomState('You were removed from "' + (p.name || 'the room') + '" by the room creator.');
+      });
+      s.on('room-closed', (p) => {
+        if (!p || !currentRoom || p.roomId !== currentRoom.id) return;
+        const why = p.reason === 'idle' ? ' because it was empty.' : '.';
+        resetRoomState('"' + (p.name || 'The room') + '" was closed' + why);
+      });
+      s.on('rooms-changed', (p) => {
+        if (!p || !Array.isArray(p.rooms)) return;
+        roomsPublicList = p.rooms;
+        const list = roomsEl('rooms-list-view');
+        if (roomsModalOpen() && list && !list.classList.contains('hidden')) refreshRoomsList();
+      });
+      s.on('profile-accepted', () => {
+        // Server drops room membership when a socket disconnects — rejoin quietly.
+        if (currentRoom) {
+          const id = currentRoom.id;
+          s.emit('room-join', { roomId: id }, (res) => {
+            if (res && res.ok) enterRoom(res.room);
+            else if (currentRoom && currentRoom.id === id) resetRoomState((res && res.message) || 'You left the room.');
+          });
+        } else if (pendingRoomInvite) {
+          const id = pendingRoomInvite;
+          setTimeout(() => { if (pendingRoomInvite === id) joinRoomById(id); }, 300);
+        }
+      });
+      s.on('logged-out', () => {
+        currentRoom = null;
+        roomMessages = [];
+        setRoomUnread(0);
+        closeRoomsModal();
+      });
+    }
+
+    function initRoomsUI() {
+      const btn = roomsEl('rooms-btn');
+      if (btn) btn.addEventListener('click', () => openRoomsModal());
+      const close = roomsEl('rooms-modal-close');
+      if (close) close.addEventListener('click', closeRoomsModal);
+      const modal = roomsEl('rooms-modal');
+      if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeRoomsModal(); });
+      const back = roomsEl('rooms-back-btn');
+      if (back) back.addEventListener('click', showRoomListView);
+      const createBtn = roomsEl('room-create-btn');
+      if (createBtn) createBtn.addEventListener('click', createRoomFromForm);
+      const createName = roomsEl('room-create-name');
+      if (createName) createName.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); createRoomFromForm(); } });
+      const refresh = roomsEl('rooms-refresh-btn');
+      if (refresh) refresh.addEventListener('click', refreshRoomsList);
+      const form = roomsEl('room-form');
+      if (form) {
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const input = roomsEl('room-input');
+          const text = input ? input.value : '';
+          if (!String(text).trim()) return;
+          sendRoomMessage(text);
+          if (input) input.value = '';
+        });
+      }
+      const leave = roomsEl('room-leave-btn');
+      if (leave) leave.addEventListener('click', leaveCurrentRoom);
+      const closeRoomBtn = roomsEl('room-close-btn');
+      if (closeRoomBtn) closeRoomBtn.addEventListener('click', closeCurrentRoom);
+      const membersToggle = roomsEl('room-members-toggle');
+      if (membersToggle) {
+        membersToggle.addEventListener('click', () => {
+          const shell = roomsEl('rooms-shell');
+          if (!shell) return;
+          shell.classList.toggle('show-members');
+          membersToggle.textContent = shell.classList.contains('show-members') ? 'Chat' : 'Members';
+        });
+      }
+      const copy = roomsEl('room-copy-link');
+      if (copy) {
+        copy.addEventListener('click', async () => {
+          if (!currentRoom) return;
+          const url = location.origin + '/?room=' + encodeURIComponent(currentRoom.id);
+          try {
+            await navigator.clipboard.writeText(url);
+            setRoomStatus('Room link copied.');
+          } catch (e) {
+            prompt('Copy this room link:', url);
+          }
+        });
+      }
+      const repClose = roomsEl('room-report-close');
+      if (repClose) repClose.addEventListener('click', closeRoomReport);
+      const repModal = roomsEl('room-report-modal');
+      if (repModal) repModal.addEventListener('click', (e) => { if (e.target === repModal) closeRoomReport(); });
+      const repSubmit = roomsEl('room-report-submit');
+      if (repSubmit) repSubmit.addEventListener('click', submitRoomReport);
+
+      try {
+        const q = new URLSearchParams(location.search).get('room');
+        if (q && /^[a-f0-9]{6,20}$/i.test(q)) pendingRoomInvite = q.toLowerCase();
+      } catch (e) { pendingRoomInvite = null; }
+      if (pendingRoomInvite) {
+        setTimeout(() => {
+          if (!pendingRoomInvite) return;
+          if (currentProfile || roomsRegisteredHere()) joinRoomById(pendingRoomInvite);
+          else openRoomsModal();
+        }, 1800);
+      }
     }
 
     function setPendingReply(reply) {
@@ -7476,6 +8218,7 @@
       console.log('[PineappleChat] Demo users:', ENABLE_DEMO_USERS ? 'ON' : 'OFF');
       populateAgeDropdown();
       initUI();
+      initRoomsUI();
       initLocationDropdowns(true);
       loadPublicMembers();
 

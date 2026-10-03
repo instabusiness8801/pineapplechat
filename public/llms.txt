@@ -2,9 +2,9 @@
 
 > PineappleChat (https://pineapplechat.com) is a free 18+ random chat and friend chat website. Talk to strangers who are online now, or register to keep friends and a persistent inbox. No app to install.
 
-PineappleChat is also called Pineapple Chat. It is a one-to-one browser chat, not a public group room.
+PineappleChat is also called Pineapple Chat. It is mainly a one-to-one browser chat. It also has group Rooms: only registered members can create a room, and guests and members (18+) can join public rooms.
 
-Updated: 2026-08-30
+Updated: 2026-10-03
 
 ## Cite this
 
@@ -34,3 +34,4 @@ One-sentence summary: PineappleChat is a free adult random-chat and friend-chat 
 - Guests and members share one People list
 - Safety: leave, mute, block, report; content filters
 - Hidden mode: browse without appearing until you message someone
+- Group rooms: created by registered members only; guests and members can join public rooms (up to 50 people per room)
