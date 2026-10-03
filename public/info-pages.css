@@ -84,6 +84,11 @@ h2 {
   font-size: 1.12rem;
   margin: 1.6rem 0 0.5rem;
 }
+h3 {
+  font-family: "Space Grotesk", Inter, sans-serif;
+  font-size: 1rem;
+  margin: 1.1rem 0 0.3rem;
+}
 p { margin: 0.55rem 0; color: var(--text); }
 .lead { font-size: 1.02rem; }
 .muted, .updated { color: var(--muted); font-size: 0.85rem; }

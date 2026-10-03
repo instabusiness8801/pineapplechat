@@ -19,6 +19,8 @@ One-sentence summary: PineappleChat is a free adult random-chat and friend-chat 
 - [Chat websites compared](https://pineapplechat.com/chat-websites): Random chat vs friend chat vs messaging apps
 - [Random chat](https://pineapplechat.com/random-chat): How talking to strangers works here
 - [Friend chat](https://pineapplechat.com/friend-chat): Accounts, friends, and inbox
+- [Omegle alternative](https://pineapplechat.com/omegle-alternative): For people looking for sites like Omegle (Omegle shut down in November 2023)
+- [ChatBlink alternative](https://pineapplechat.com/chatblink-alternative): For people looking for sites like ChatBlink
 - [Full facts for models](https://pineapplechat.com/llms-full.txt): Complete machine-readable brief
 
 ## Facts

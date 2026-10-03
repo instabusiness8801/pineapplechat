@@ -28,6 +28,10 @@ app.use((req, res, next) => {
   if (host === 'www.pineapplechat.com') {
     return res.redirect(301, 'https://pineapplechat.com' + req.originalUrl);
   }
+  // Send *.onrender.com visitors (and search engines) to the canonical domain.
+  if (host.endsWith('.onrender.com')) {
+    return res.redirect(301, 'https://pineapplechat.com' + req.originalUrl);
+  }
   next();
 });
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -48,7 +52,9 @@ const infoPages = {
   '/about': 'about.html',
   '/random-chat': 'random-chat.html',
   '/friend-chat': 'friend-chat.html',
-  '/chat-websites': 'chat-websites.html'
+  '/chat-websites': 'chat-websites.html',
+  '/omegle-alternative': 'omegle-alternative.html',
+  '/chatblink-alternative': 'chatblink-alternative.html'
 };
 Object.keys(infoPages).forEach((route) => {
   app.get(route, sendPublicHtml(infoPages[route]));

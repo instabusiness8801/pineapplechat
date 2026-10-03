@@ -87,7 +87,9 @@ const pubFiles = [
   'about.html',
   'chat-websites.html',
   'random-chat.html',
-  'friend-chat.html'
+  'friend-chat.html',
+  'omegle-alternative.html',
+  'chatblink-alternative.html'
 ];
 for (const f of pubFiles) {
   const p = path.join(__dirname, '..', 'public', f);
