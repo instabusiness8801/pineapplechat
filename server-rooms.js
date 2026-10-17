@@ -255,6 +255,7 @@ function createRooms(deps) {
 
     socket.on('room-create', (data, ack) => {
       const reply = ackFn(data, ack);
+      if (deps.enforceBan && deps.enforceBan(socket)) { reply({ ok: false, code: 'banned', message: 'You are blocked from PineappleChat.' }); return; }
       const email = verifiedEmailOf(socket);
       if (!email) {
         reply({ ok: false, code: 'register-required', message: 'Register and log in to create rooms.' });
@@ -346,6 +347,7 @@ function createRooms(deps) {
 
     socket.on('room-join', (data, ack) => {
       const reply = ackFn(data, ack);
+      if (deps.enforceBan && deps.enforceBan(socket)) { reply({ ok: false, code: 'banned', message: 'You are blocked from PineappleChat.' }); return; }
       const room = rooms.get(String((data && data.roomId) || ''));
       if (!room) { reply({ ok: false, code: 'not-found', message: 'Room not found or already closed.' }); return; }
       const rl = features.rateLimit('room-join:' + socket.id, 30, 60 * 1000);

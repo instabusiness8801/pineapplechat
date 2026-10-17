@@ -12,6 +12,7 @@ const accounts = require(path.join(__dirname, 'server-accounts.js'));
 const features = require(path.join(__dirname, 'server-features.js'));
 const inbox = require(path.join(__dirname, 'server-inbox.js'));
 const { createRooms } = require(path.join(__dirname, 'server-rooms.js'));
+const moderation = require(path.join(__dirname, 'server-moderation.js'));
 
 const app = express();
 const server = http.createServer(app);
@@ -22,6 +23,8 @@ const io = new Server(server, {
   pingInterval: 25000
 });
 
+// Behind Render's proxy the real client IP is the first x-forwarded-for entry.
+if (moderation.trustProxy()) app.set('trust proxy', true);
 app.use(express.json({ limit: '32kb' }));
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -968,7 +971,220 @@ const rooms = createRooms({
     if (!socket) return null;
     return socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id)) || null;
   }
+,
+  enforceBan: (socket) => enforceBan(socket)
 });
+
+// ---- Site moderation: owner bans + automatic temporary IP blocks ----
+function socketModCtx(socket) {
+  if (!socket) return {};
+  const token = socket.sessionToken || socketToSession.get(socket.id) || null;
+  const email = socket.accountEmail || (token ? accounts.getEmailForSession(token) : null) || null;
+  return { ip: socket.clientIp || null, deviceId: socket.deviceId || null, token, email };
+}
+
+function isOwnerSocket(socket) {
+  const ctx = socketModCtx(socket);
+  return !!(ctx.email && accounts.isOwner(ctx.email));
+}
+
+/** Tell the socket it is banned, end chats/rooms, drop its session, then disconnect it. */
+function kickSocketForBan(socket, ban) {
+  if (!socket || socket.__pcBanned) return;
+  socket.__pcBanned = true;
+  const payload = moderation.banPayload(ban);
+  try {
+    const partnerId = getPartnerId(socket.id);
+    try { rooms.leaveCurrent(socket, 'banned'); } catch (e) { /* ignore */ }
+    siteBotChats.delete(socket.id);
+    forceLogoutSocket(socket, 'banned');
+    if (partnerId) {
+      const partner = getLiveSocket(partnerId);
+      if (partner) {
+        partner.emit('partner-left', { reason: 'logout', partnerId: socket.id, temporary: false });
+        partner.emit('chat-left', { by: socket.id, partnerId: socket.id, logout: true });
+      }
+      unpair(partnerId);
+    }
+  } catch (e) {
+    console.warn('[moderation] kick cleanup:', e.message);
+  }
+  socket.emit('banned', payload);
+  socket.emit('logged-out', { ok: true, banned: true });
+  setTimeout(() => {
+    try { socket.disconnect(true); } catch (e) { /* ignore */ }
+  }, 300);
+}
+
+/** Returns the active ban for this socket (and kicks it), or null. extra overrides ctx fields. */
+function enforceBan(socket, extra) {
+  if (!socket) return null;
+  const ctx = Object.assign(socketModCtx(socket), extra || {});
+  if (ctx.email && accounts.isOwner(ctx.email)) return null;
+  const ban = moderation.findBan(ctx, accounts.isOwner);
+  if (!ban) return null;
+  console.log(`[moderation] blocked ${ctx.email || ctx.ip || socket.id} (ban ${ban.id}, ${ban.kind})`);
+  kickSocketForBan(socket, ban);
+  return ban;
+}
+
+/** Kick every live socket / grace session covered by a new ban. Returns number of sockets kicked. */
+function applyBanEverywhere(ban) {
+  let kicked = 0;
+  for (const s of io.sockets.sockets.values()) {
+    if (isOwnerSocket(s)) continue;
+    if (moderation.matchesBan(ban, socketModCtx(s), accounts.isOwner)) {
+      kickSocketForBan(s, ban);
+      kicked += 1;
+    }
+  }
+  const tokens = new Set(ban.tokens || []);
+  if (ban.email) {
+    try { (accounts.findAllSessionTokensForEmail(ban.email) || []).forEach((t) => tokens.add(t)); } catch (e) { /* ignore */ }
+    try { accounts.revokeAuthTokensForEmail(ban.email); } catch (e) { /* ignore */ }
+  }
+  for (const [t, sess] of [...sessions.entries()]) {
+    const match = tokens.has(t) ||
+      (sess.clientIp && (ban.ips || []).includes(sess.clientIp)) ||
+      (sess.deviceId && (ban.deviceIds || []).includes(sess.deviceId));
+    if (!match) continue;
+    const em = accounts.getEmailForSession(t);
+    if (em && accounts.isOwner(em)) continue;
+    const live = sess.socketId && getLiveSocket(sess.socketId);
+    if (live) kickSocketForBan(live, ban);
+    accounts.unbindSession(t);
+    removeSession(t, 'banned');
+  }
+  broadcastOnlineUsers();
+  broadcastStats();
+  io.emit('members-changed');
+  return kicked;
+}
+
+/** IPs and device ids the owner is using right now (never banned). */
+function ownerIdentifiers() {
+  const ips = [];
+  const devs = [];
+  for (const s of io.sockets.sockets.values()) {
+    if (!isOwnerSocket(s)) continue;
+    if (s.clientIp) ips.push(s.clientIp);
+    if (s.deviceId) devs.push(s.deviceId);
+  }
+  return { ips, devs };
+}
+
+function identityFromSocket(s, into) {
+  if (!s) return;
+  if (s.clientIp) into.ips.push(s.clientIp);
+  if (s.deviceId) into.deviceIds.push(s.deviceId);
+  const ctx = socketModCtx(s);
+  if (ctx.token) into.tokens.push(ctx.token);
+  if (!into.email && ctx.email) into.email = ctx.email;
+  if (!into.name && s.profile && s.profile.username) into.name = s.profile.username;
+}
+
+function identityFromSession(sess, into) {
+  if (!sess) return;
+  const t = sessionTokenOf(sess);
+  if (t) {
+    into.tokens.push(t);
+    const em = accounts.getEmailForSession(t);
+    if (em && !into.email) into.email = em;
+  }
+  if (sess.clientIp) into.ips.push(sess.clientIp);
+  if (sess.deviceId) into.deviceIds.push(sess.deviceId);
+  if (!into.name && sess.profile && sess.profile.username) into.name = sess.profile.username;
+}
+
+/** Gather everything we know about a target (report entry / email / socket id / token). */
+function collectBanTarget(data) {
+  const into = { email: null, ips: [], deviceIds: [], tokens: [], name: null, reportId: null, isBot: false };
+  const d = data || {};
+  if (d.reportId) {
+    const r = features.getReports(500).find((x) => x.id === String(d.reportId));
+    if (!r) return { error: 'Report not found.' };
+    into.reportId = r.id;
+    if (isSiteBotTarget(r.targetId) || isSiteBotTarget(r.targetToken)) into.isBot = true;
+    if (r.targetEmail) into.email = String(r.targetEmail).toLowerCase();
+    if (r.targetIp) into.ips.push(r.targetIp);
+    if (r.targetDeviceId) into.deviceIds.push(r.targetDeviceId);
+    if (r.targetToken) into.tokens.push(r.targetToken);
+    into.name = r.targetName || null;
+    const live = resolveLiveSocketForTarget(r.targetToken || r.targetId);
+    identityFromSocket(live.socket, into);
+    identityFromSession(live.session, into);
+    if (!live.socket && r.targetId) identityFromSocket(getLiveSocket(r.targetId), into);
+  }
+  if (d.email) {
+    const em = String(d.email).trim().toLowerCase();
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      into.email = into.email || em;
+      const acc = accounts.getAccountByEmail(em);
+      if (acc && !into.name) into.name = acc.displayName || null;
+    }
+  }
+  if (d.targetId || d.targetSessionToken) {
+    if (isSiteBotTarget(d.targetId) || isSiteBotTarget(d.targetSessionToken)) into.isBot = true;
+    const live = resolveLiveSocketForTarget(d.targetSessionToken || d.targetId);
+    identityFromSocket(live.socket, into);
+    identityFromSession(live.session, into);
+  }
+  // Add every live socket / session of that account.
+  if (into.email) {
+    for (const s of io.sockets.sockets.values()) {
+      const ctx = socketModCtx(s);
+      if (ctx.email === into.email) identityFromSocket(s, into);
+    }
+    try {
+      (accounts.findAllSessionTokensForEmail(into.email) || []).forEach((t) => identityFromSession(getSessionByToken(t), into));
+    } catch (e) { /* ignore */ }
+  }
+  return into;
+}
+
+// Enrich reports with IPs / identities so admins can ban and auto-block can count distinct reporters.
+features.setReportHooks(
+  (entry) => {
+    const reporter = entry.reporterId ? getLiveSocket(entry.reporterId) : null;
+    if (reporter) {
+      const ctx = socketModCtx(reporter);
+      entry.reporterIp = ctx.ip || null;
+      entry.reporterEmail = ctx.email || null;
+      entry.reporterKey = ctx.email ? 'e:' + ctx.email : (ctx.deviceId ? 'd:' + ctx.deviceId : (ctx.token ? 't:' + ctx.token : 's:' + reporter.id));
+    }
+    if (isSiteBotTarget(entry.targetId) || isSiteBotTarget(entry.targetToken)) {
+      entry.targetIsBot = true;
+      return;
+    }
+    const live = resolveLiveSocketForTarget(entry.targetToken || entry.targetId);
+    let tSock = live.socket || (entry.targetId ? getLiveSocket(entry.targetId) : null);
+    const tSess = live.session || (tSock ? getSessionBySocket(tSock.id) : null);
+    if (tSock) {
+      const ctx = socketModCtx(tSock);
+      entry.targetIp = ctx.ip || null;
+      entry.targetDeviceId = ctx.deviceId || null;
+      entry.targetEmail = ctx.email || null;
+      if (!entry.targetToken && ctx.token) entry.targetToken = ctx.token;
+    }
+    if (tSess) {
+      if (!entry.targetIp && tSess.clientIp) entry.targetIp = tSess.clientIp;
+      if (!entry.targetDeviceId && tSess.deviceId) entry.targetDeviceId = tSess.deviceId;
+      const t = sessionTokenOf(tSess);
+      if (!entry.targetEmail && t) entry.targetEmail = accounts.getEmailForSession(t) || null;
+    }
+  },
+  (entry, allReports) => {
+    if (entry.targetIsBot) return;
+    const ban = moderation.checkAutoBlock(entry, allReports, {
+      isOwnerFn: accounts.isOwner,
+      isProtectedIp: (ip) => ownerIdentifiers().ips.includes(ip)
+    });
+    if (ban) {
+      const n = applyBanEverywhere(ban);
+      console.log(`[moderation] auto-block kicked ${n} socket(s)`);
+    }
+  }
+);
 
 app.get('/api/rooms', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -977,6 +1193,14 @@ app.get('/api/rooms', (req, res) => {
 
 io.on('connection', (socket) => {
   console.log(`[connect] ${socket.id}`);
+
+  socket.clientIp = moderation.clientIpFrom(socket.handshake.headers, socket.handshake.address);
+  {
+    const auth = socket.handshake.auth || {};
+    const q = socket.handshake.query || {};
+    socket.deviceId = moderation.cleanDeviceId(auth.deviceId || q.deviceId);
+  }
+  if (enforceBan(socket)) return;
 
   {
     const tok = resolveSessionTokenForSocket(socket);
@@ -994,6 +1218,9 @@ io.on('connection', (socket) => {
 
   socket.on('set-profile', (profile) => {
     const cleanedProfile = profile || {};
+    if (enforceBan(socket, {
+      token: (typeof cleanedProfile.sessionToken === 'string' && cleanedProfile.sessionToken.trim()) || socket.sessionToken || null
+    })) return;
     const accountEmail = socket.accountEmail || accounts.getEmailForSession(socket.sessionToken || socketToSession.get(socket.id));
     const acc = accountEmail ? accounts.getAccountByEmail(accountEmail) : null;
     if (cleanedProfile.fromAccount && acc && acc.verified) {
@@ -1185,6 +1412,8 @@ io.on('connection', (socket) => {
     socket.profile = cleanedProfile;
     socket.sessionToken = token;
     socket.intentionalLogout = false; // joined / re-joined after log off
+    sess.clientIp = socket.clientIp || sess.clientIp || null;
+    sess.deviceId = socket.deviceId || sess.deviceId || null;
     sess.browseHidden = false;
     if (typeof socket.stealth === 'boolean') sess.stealth = socket.stealth;
     if (!sess.revealedTo) sess.revealedTo = new Set();
@@ -1770,7 +1999,11 @@ io.on('connection', (socket) => {
   }
 
   socket.on('account-register', async (data, ack) => {
-    const rl = features.rateLimit('reg:' + (socket.handshake.address || socket.id), 15, 15 * 60 * 1000);
+    if (enforceBan(socket, { email: data && data.email ? String(data.email).trim().toLowerCase() : null })) {
+      if (typeof ack === 'function') ack({ ok: false, banned: true, message: moderation.BAN_MESSAGE });
+      return;
+    }
+    const rl = features.rateLimit('reg:' + (socket.clientIp || socket.handshake.address || socket.id), 15, 15 * 60 * 1000);
     if (!rl.ok) {
       if (typeof ack === 'function') ack(rl);
       return;
@@ -1824,7 +2057,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('account-password-reset-request', async (data, ack) => {
-    const rl = features.rateLimit('reset:' + (socket.handshake.address || socket.id), 10, 15 * 60 * 1000);
+    const rl = features.rateLimit('reset:' + (socket.clientIp || socket.handshake.address || socket.id), 10, 15 * 60 * 1000);
     if (!rl.ok) {
       if (typeof ack === 'function') ack(rl);
       return;
@@ -1839,9 +2072,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('account-verify', (data, ack) => {
+    if (enforceBan(socket, { email: data && data.email ? String(data.email).trim().toLowerCase() : null })) {
+      if (typeof ack === 'function') ack({ ok: false, banned: true, message: moderation.BAN_MESSAGE });
+      return;
+    }
     const result = accounts.verify(data && data.email, data && data.code);
     if (result.ok) {
       bindAccountToSocket(data.email);
+      if (accounts.isOwner(data.email)) moderation.noteOwnerSeen(socket.clientIp, socket.deviceId);
       accounts.touchLastLogin(data.email);
       io.emit('members-changed');
       broadcastOnlineUsers();
@@ -1852,7 +2090,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('account-login', async (data, ack) => {
-    const rl = features.rateLimit('login:' + (socket.handshake.address || socket.id), 20, 15 * 60 * 1000);
+    if (enforceBan(socket, { email: data && data.email ? String(data.email).trim().toLowerCase() : null })) {
+      if (typeof ack === 'function') ack({ ok: false, banned: true, message: moderation.BAN_MESSAGE });
+      return;
+    }
+    const rl = features.rateLimit('login:' + (socket.clientIp || socket.handshake.address || socket.id), 20, 15 * 60 * 1000);
     if (!rl.ok) {
       if (typeof ack === 'function') ack(rl);
       return;
@@ -1860,6 +2102,7 @@ io.on('connection', (socket) => {
     const result = await accounts.login(data && data.email, data && data.password);
     if (result.ok) {
       bindAccountToSocket(data.email);
+      if (accounts.isOwner(data.email)) moderation.noteOwnerSeen(socket.clientIp, socket.deviceId);
       io.emit('members-changed');
       broadcastOnlineUsers();
       broadcastStats();
@@ -1870,7 +2113,12 @@ io.on('connection', (socket) => {
 
   socket.on('account-restore', (data, ack) => {
     const result = accounts.restoreAuth(data && data.token);
+    if (result.ok && result.account && enforceBan(socket, { email: String(result.account.email || '').toLowerCase() })) {
+      if (typeof ack === 'function') ack({ ok: false, banned: true, message: moderation.BAN_MESSAGE });
+      return;
+    }
     if (result.ok && result.account) {
+      if (accounts.isOwner(result.account.email)) moderation.noteOwnerSeen(socket.clientIp, socket.deviceId);
       bindAccountToSocket(result.account.email);
       accounts.touchLastSeen(result.account.email);
       result.unread = inbox.unreadCount(result.account.email);
@@ -2053,8 +2301,55 @@ io.on('connection', (socket) => {
     const result = accounts.listAllUsersAdmin(me ? me.token : sessionTokenOfSocket(), friendPresenceForEmail);
     if (result.ok) {
       result.reports = features.getReports(100);
+      result.bans = moderation.listForAdmin();
     }
     if (typeof ack === 'function') ack(result);
+  });
+
+  function requireOwner() {
+    const me = requireVerifiedAccount();
+    if (!me || !accounts.isOwner(me.email)) return null;
+    return me;
+  }
+
+  socket.on('admin-bans', (data, ack) => {
+    ack = pickAck(data, ack);
+    if (typeof ack !== 'function') return;
+    if (!requireOwner()) return ack({ ok: false, message: 'Owner access only.' });
+    ack({ ok: true, bans: moderation.listForAdmin() });
+  });
+
+  socket.on('admin-ban', (data, ack) => {
+    ack = pickAck(data, ack) || (() => {});
+    const me = requireOwner();
+    if (!me) return ack({ ok: false, message: 'Owner access only.' });
+    const target = collectBanTarget(data);
+    if (target.error) return ack({ ok: false, message: target.error });
+    if (target.isBot) return ack({ ok: false, message: 'That is the PineappleChat Bot — it cannot be banned.' });
+    if (target.email && accounts.isOwner(target.email)) return ack({ ok: false, message: 'You cannot ban the owner account.' });
+    const own = ownerIdentifiers();
+    if (socket.clientIp) own.ips.push(socket.clientIp);
+    if (socket.deviceId) own.devs.push(socket.deviceId);
+    const myToken = sessionTokenOfSocket();
+    target.tokens = target.tokens.filter((t) => t && t !== myToken);
+    const result = moderation.addManualBan(target, {
+      by: me.email,
+      reason: data && data.reason,
+      excludeIps: own.ips,
+      excludeDevices: own.devs
+    });
+    if (!result.ok) return ack(result);
+    const kicked = applyBanEverywhere(result.ban);
+    ack({ ok: true, ban: result.ban, kicked, bans: moderation.listForAdmin() });
+  });
+
+  socket.on('admin-unban', (data, ack) => {
+    ack = pickAck(data, ack) || (() => {});
+    const me = requireOwner();
+    if (!me) return ack({ ok: false, message: 'Owner access only.' });
+    const result = moderation.unban(data && data.banId, me.email);
+    if (result.ok) result.bans = moderation.listForAdmin();
+    ack(result);
   });
 
   socket.on('account-block', (data, ack) => {
@@ -2575,6 +2870,7 @@ backup
       accounts.reload();
       inbox.reload();
       features.reloadReports();
+      moderation.reload();
     }
   })
   .catch((e) => console.warn('[backup] startup:', e.message))

@@ -65,6 +65,14 @@ function getReports(limit) {
   return reports.slice(-n).reverse();
 }
 
+// Optional hooks set by server.js: enrich a report (IPs / account) before save, and react after save.
+let reportEnricher = null;
+let reportListener = null;
+function setReportHooks(enrich, listen) {
+  reportEnricher = typeof enrich === 'function' ? enrich : null;
+  reportListener = typeof listen === 'function' ? listen : null;
+}
+
 function addReport({ reporterId, reporterToken, reporterName, targetId, targetToken, targetName, reason, details }) {
   const entry = {
     id: crypto.randomBytes(8).toString('hex'),
@@ -78,8 +86,15 @@ function addReport({ reporterId, reporterToken, reporterName, targetId, targetTo
     reason: String(reason || 'other').slice(0, 40),
     details: String(details || '').slice(0, 500)
   };
+  if (reportEnricher) {
+    try { reportEnricher(entry); } catch (e) { console.warn('[features] report enrich:', e.message); }
+  }
   reports.push(entry);
+  if (reports.length > 600) reports.splice(0, reports.length - 500);
   saveReports();
+  if (reportListener) {
+    try { reportListener(entry, reports.slice()); } catch (e) { console.warn('[features] report listener:', e.message); }
+  }
   console.log(`[report] ${entry.reporterName || entry.reporterId} → ${entry.targetName || entry.targetId}: ${entry.reason}`);
   return { ok: true, message: 'Report submitted. Thank you for helping keep PineappleChat safe.', id: entry.id };
 }
@@ -254,6 +269,7 @@ module.exports = {
   addReport,
   getReports,
   reloadReports,
+  setReportHooks,
   toggleReaction,
   reactionSnapshot,
   registerMessageOwner,

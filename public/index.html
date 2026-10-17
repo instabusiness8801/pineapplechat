@@ -1996,7 +1996,9 @@
           <p class="text-[10px] theme-muted">You can open any inbox and message without the 5-message limit.</p>
           <ul id="admin-users-list" class="text-xs space-y-1 theme-muted max-h-56 overflow-y-auto"></ul>
           <div class="text-xs font-semibold theme-text-strong mt-2">Recent reports</div>
-          <ul id="admin-reports-list" class="text-[11px] space-y-1 theme-muted max-h-32 overflow-y-auto"></ul>
+          <ul id="admin-reports-list" class="text-[11px] space-y-1 theme-muted max-h-48 overflow-y-auto"></ul>
+          <div class="text-xs font-semibold theme-text-strong mt-2">Active bans &amp; auto-blocks</div>
+          <ul id="admin-bans-list" class="text-[11px] space-y-1 theme-muted max-h-48 overflow-y-auto"></ul>
         </div>
         <button type="button" id="account-logout-email" class="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1.5">Log out</button>
       </div>
@@ -3125,12 +3127,57 @@
       return { ok: true, text: clean };
     }
 
+    // Per-browser device id (lets the owner's bans cover this browser even after the IP changes)
+    function getDeviceId() {
+      try {
+        let id = localStorage.getItem('pc_device_id');
+        if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
+          const bytes = new Uint8Array(12);
+          (window.crypto || window.msCrypto).getRandomValues(bytes);
+          id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+          localStorage.setItem('pc_device_id', id);
+        }
+        return id;
+      } catch (e) {
+        return '';
+      }
+    }
+
+    let siteBanned = false;
+    function showBannedScreen(info) {
+      siteBanned = true;
+      intentionalLogout = true;
+      let msg = (info && info.message) || 'You have been banned for violating the rules.';
+      if (info && info.kind === 'auto' && info.until) {
+        try {
+          msg = 'You are temporarily blocked because several people reported you. You can come back after ' +
+            new Date(info.until).toLocaleString() + '.';
+        } catch (e) { /* keep server text */ }
+      }
+      let el = document.getElementById('pc-banned-overlay');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'pc-banned-overlay';
+        el.setAttribute('role', 'alertdialog');
+        el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.92);padding:24px;';
+        el.innerHTML = '<div style="max-width:420px;background:#fff;color:#0f172a;border-radius:16px;padding:24px;text-align:center;font-family:inherit;box-shadow:0 10px 40px rgba(0,0,0,.4)">' +
+          '<div style="font-size:40px;line-height:1">&#9940;</div>' +
+          '<h2 style="font-size:20px;font-weight:700;margin:12px 0 8px">Access blocked</h2>' +
+          '<p id="pc-banned-text" style="font-size:15px;margin:0"></p></div>';
+        document.body.appendChild(el);
+      }
+      const t = document.getElementById('pc-banned-text');
+      if (t) t.textContent = msg;
+      try { if (typeof applyLoggedOutLocalState === 'function') applyLoggedOutLocalState(); } catch (e) { /* ignore */ }
+    }
+
     function connectSocket() {
       if (socket) return socket;
 
       // polling + websocket: more reliable on mobile / cellular / some tablets
       socket = io({
         path: '/socket.io',
+        auth: { deviceId: getDeviceId() },
         transports: ['polling', 'websocket'],
         upgrade: true,
         reconnection: true,
@@ -3183,6 +3230,11 @@
         restoreAccountSession();
         loadPublicMembers();
         if (hiddenMode) socket.emit('set-hidden-mode', { hidden: true });
+      });
+
+      socket.on('banned', (info) => {
+        showBannedScreen(info);
+        try { socket.io.opts.reconnection = false; } catch (e) { /* ignore */ }
       });
 
       socket.on('logged-out', () => {
@@ -3583,6 +3635,7 @@
       });
 
       socket.on('disconnect', () => {
+        if (siteBanned) return;
         addSystemMessage('Connection lost. Reconnecting...');
       });
 
@@ -5275,6 +5328,9 @@
               btn.onclick = () => openInboxWith(u.email);
               li.appendChild(btn);
             }
+            if (!u.isOwner && u.email !== (myAccount && myAccount.email)) {
+              li.appendChild(adminBanButton({ email: u.email }, u.displayName || u.email));
+            }
             ul.appendChild(li);
           });
         }
@@ -5284,11 +5340,87 @@
           if (!reports.length) reportsUl.innerHTML = '<li class="theme-muted">No reports.</li>';
           reports.forEach((r) => {
             const li = document.createElement('li');
-            li.textContent = (r.reporterName || r.reporterId || 'user') + ' → ' + (r.targetName || r.targetId || 'user') + ': ' + (r.reason || 'other');
+            li.className = 'py-1 border-b theme-border last:border-0';
+            const line = document.createElement('div');
+            line.textContent = (r.reporterName || r.reporterId || 'user') + ' → ' + (r.targetName || r.targetId || 'user') + ': ' + (r.reason || 'other') +
+              (r.at ? ' · ' + new Date(r.at).toLocaleString() : '');
+            li.appendChild(line);
+            if (r.details) {
+              const det = document.createElement('div');
+              det.className = 'text-[10px] theme-muted truncate';
+              det.textContent = r.details;
+              li.appendChild(det);
+            }
+            const isBot = r.targetIsBot || String(r.targetId || '').indexOf('bot:') === 0;
+            if (!isBot) li.appendChild(adminBanButton({ reportId: r.id }, r.targetName || 'this user'));
             reportsUl.appendChild(li);
           });
         }
+        renderAdminBans(res && res.bans);
       });
+    }
+
+    function adminBanButton(payload, label) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'text-[10px] px-2 py-0.5 rounded border border-red-300 text-red-600 mt-1 ml-1';
+      btn.textContent = 'Ban';
+      btn.onclick = () => {
+        if (!confirm('Ban ' + label + '? They will be disconnected and blocked (account, IP and device).')) return;
+        btn.disabled = true;
+        socket.emit('admin-ban', payload, (res) => {
+          btn.disabled = false;
+          alert((res && res.ok) ? ('Banned ' + label + (res.kicked ? ' — ' + res.kicked + ' connection(s) closed.' : '.')) : ((res && res.message) || 'Ban failed.'));
+          refreshAdminUI();
+        });
+      };
+      return btn;
+    }
+
+    function renderAdminBans(bans) {
+      const ul = document.getElementById('admin-bans-list');
+      if (!ul) return;
+      ul.innerHTML = '';
+      const active = (bans && bans.active) || [];
+      if (!active.length) {
+        ul.innerHTML = '<li class="theme-muted">No active bans.</li>';
+      }
+      active.forEach((b) => {
+        const li = document.createElement('li');
+        li.className = 'py-1 border-b theme-border last:border-0';
+        const who = b.name || b.email || (b.ips && b.ips[0]) || 'user';
+        const kind = b.kind === 'auto' ? 'AUTO-BLOCK' : 'BAN';
+        const until = b.expiresAt ? 'until ' + new Date(b.expiresAt).toLocaleString() : 'permanent';
+        const top = document.createElement('div');
+        top.textContent = kind + ' · ' + who + ' · ' + until;
+        li.appendChild(top);
+        const meta = document.createElement('div');
+        meta.className = 'text-[10px] theme-muted';
+        meta.textContent = [b.email, (b.ips || []).join(', '), b.reason, b.at ? 'since ' + new Date(b.at).toLocaleString() : '']
+          .filter(Boolean).join(' · ');
+        li.appendChild(meta);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'text-[10px] px-2 py-0.5 rounded border theme-border mt-1';
+        btn.textContent = 'Unban';
+        btn.onclick = () => {
+          if (!confirm('Unban ' + who + '?')) return;
+          socket.emit('admin-unban', { banId: b.id }, (res) => {
+            if (!res || !res.ok) alert((res && res.message) || 'Unban failed.');
+            refreshAdminUI();
+          });
+        };
+        li.appendChild(btn);
+        ul.appendChild(li);
+      });
+      const recent = (bans && bans.recent) || [];
+      if (recent.length) {
+        const li = document.createElement('li');
+        li.className = 'pt-1 theme-muted';
+        li.textContent = 'Recently lifted: ' + recent.slice(0, 8).map((b) =>
+          (b.name || b.email || (b.ips && b.ips[0]) || 'user') + ' (' + (b.kind === 'auto' ? 'auto, ' : '') + b.status + ')').join('; ');
+        ul.appendChild(li);
+      }
     }
 
     function refreshAccountLists() {

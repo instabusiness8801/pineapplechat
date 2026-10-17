@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { DATA_DIR, ensureDataDir } = require(path.join(__dirname, 'data-dir.js'));
 
-const FILES = ['accounts.json', 'inbox.json', 'reports.json', 'pending.json'];
+const FILES = ['accounts.json', 'inbox.json', 'reports.json', 'pending.json', 'bans.json'];
 const META = 'meta.json';
 
 function gistId() {
